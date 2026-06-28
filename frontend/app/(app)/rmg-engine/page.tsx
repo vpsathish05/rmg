@@ -68,107 +68,150 @@ function PipelineLogicModal({ open, onClose }: { open: boolean; onClose: () => v
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-8 py-5 flex items-center justify-between rounded-t-3xl">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-8 py-5 flex items-center justify-between rounded-t-3xl z-10">
           <div>
             <h2 className="text-lg font-bold text-gray-900">AI Recommendation Pipeline</h2>
-            <p className="text-xs text-gray-400 mt-0.5">How candidates are scored and ranked</p>
+            <p className="text-xs text-gray-400 mt-0.5">Visual flow: how data goes in and recommendations come out</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-all">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-8 py-6 space-y-6">
-          {/* Data Source */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">1</span>
-              Data Source
-            </h3>
-            <p className="text-xs text-gray-600 leading-relaxed">
-              Pipeline roles come from the <span className="font-mono bg-gray-100 px-1 rounded">pipeline_requests</span> table.
-              Each role has a client, role code, canonical roles, allocation %, duration, and required skills.
-              Only roles with status <span className="font-semibold text-red-600">"Not Resourced"</span> are scored.
-            </p>
-          </section>
+        <div className="px-8 py-6 space-y-8">
 
-          {/* AI Pipeline Steps */}
+          {/* ── High-Level Flow ── */}
           <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">2</span>
-              AI Scoring Pipeline
-            </h3>
-            <div className="space-y-3">
+            <h3 className="text-sm font-bold text-gray-900 mb-4">End-to-End Flow</h3>
+            <div className="flex items-start gap-2 overflow-x-auto pb-2">
               {[
-                { step: "COE Detection", desc: "Identifies the technology domain (e.g., Data Engineering, Consulting) via SQL frequency analysis. Falls back to GPT-4o inference if SQL returns nothing.", color: "#7c3aed" },
-                { step: "Skills Extraction", desc: "For roles with missing required_skills, GPT-4o infers 3-5 likely technical skills from the role name and context.", color: "#a855f7" },
-                { step: "Semantic Skill Matching", desc: "Embeds the role query (role + COE + skills) and compares via cosine similarity against pre-computed employee skill profile embeddings (1536 dimensions).", color: "#6d28d9" },
-                { step: "Formula Scoring", desc: "Weighted sum: Skill×0.40 + Competency×0.25 + Availability×0.25 + Productivity×0.10. Skill score blends 50% COE match + 50% semantic similarity.", color: "#7c3aed" },
-                { step: "Rationale Generation", desc: "GPT-4o writes a 2-3 sentence explanation for each top 10 candidate covering skill fit, availability, and concerns.", color: "#a855f7" },
-                { step: "LLM Re-Ranking", desc: "GPT-4o re-orders top 10 candidates considering holistic fit — skill alignment, availability, location, seniority match, and team composition.", color: "#6d28d9" },
-                { step: "KB Proof Search", desc: "pgvector cosine search finds past projects each candidate worked on as evidence of relevant experience.", color: "#7c3aed" },
-                { step: "Hire Signal", desc: "When no match exists, GPT-4o generates an actionable hiring profile with seniority, skills, experience years, and engagement type.", color: "#a855f7" },
-              ].map((item, i) => (
-                <div key={i} className="flex gap-3 items-start">
-                  <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[9px] font-bold text-white" style={{ background: item.color }}>{i + 1}</div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-900">{item.step}</p>
-                    <p className="text-[11px] text-gray-500 leading-relaxed mt-0.5">{item.desc}</p>
-                  </div>
+                { label: "Pipeline Role", color: "#FF6196" },
+                { label: "COE Detect", color: "#19105B" },
+                { label: "Skills Extract", color: "#19105B" },
+                { label: "Semantic Match", color: "#19105B" },
+                { label: "Formula Score", color: "#19105B" },
+                { label: "Rationale", color: "#19105B" },
+                { label: "Re-Rank", color: "#19105B" },
+                { label: "KB Proof", color: "#19105B" },
+                { label: "Output", color: "#FF6196" },
+              ].map((s, i) => (
+                <div key={i} className="flex items-center shrink-0">
+                  <div className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white whitespace-nowrap" style={{ background: s.color }}>{s.label}</div>
+                  {i < 8 && <ChevronRight className="w-3.5 h-3.5 text-gray-300 mx-0.5 shrink-0" />}
                 </div>
               ))}
             </div>
-          </section>
-
-          {/* Scoring Formula */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">3</span>
-              Scoring Formula
-            </h3>
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 font-mono text-[11px] text-gray-700 space-y-1">
-              <p><span className="text-violet-600 font-semibold">With competency:</span> total = skill×0.40 + comp×0.25 + avail×0.25 + prod×0.10</p>
-              <p><span className="text-violet-600 font-semibold">Without:</span> total = skill×0.65 + avail×0.25 + prod×0.10</p>
-              <p className="pt-2 border-t border-gray-200 mt-2"><span className="text-violet-600 font-semibold">Skill blend:</span> 50% COE assessment + 50% semantic embedding similarity</p>
+            <div className="flex gap-3 mt-3 text-[10px]">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> AI/LLM</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> Embeddings</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> DB/Math</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> Evidence</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#FF6196"}} /> Input/Output</span>
             </div>
           </section>
 
-          {/* Categories */}
+          {/* ── Step-by-Step ── */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-bold text-gray-900">Step-by-Step</h3>
+            {[
+              { num: 1, title: "COE Detection", tag: "SQL → fallback → GPT-4o", color: "violet", desc: "Queries employee_skills: which COE do most people with this role have? If empty → global fallback → GPT-4o infers from available COEs." },
+              { num: 2, title: "Skills Extraction", tag: "Only when null", color: "violet", desc: "If pipeline has skills → use them. If null → GPT-4o: \"For this role + COE, list 3-5 technical skills.\"" },
+              { num: 3, title: "Semantic Skill Match", tag: "Embeddings API + pgvector", color: "blue", desc: "Embeds role query (role+COE+skills) into 1536-d vector → cosine similarity vs 286 pre-computed employee skill profile vectors." },
+              { num: 4, title: "Formula Scoring", tag: "Pure math — free", color: "emerald", desc: "5 batch SQL queries → score all employees: skill×0.40 + comp×0.25 + avail×0.25 + prod×0.10. Categorize: Available / BestMatch / Stretch." },
+              { num: 5, title: "Rationale Generation", tag: "GPT-4o × 10 parallel", color: "violet", desc: "Per top-10 candidate: \"Write 2-3 sentences about skill fit, availability, concerns for this role.\"" },
+              { num: 6, title: "LLM Re-Ranking", tag: "GPT-4o × 1", color: "violet", desc: "\"Re-order these 10 candidates considering skill alignment, seniority match, location, team composition.\" Catches title-match the formula misses." },
+              { num: 7, title: "KB Proof Search", tag: "pgvector cosine", color: "amber", desc: "For top 6: finds past projects they worked on with similar skills/COE — evidence of relevant experience." },
+              { num: 8, title: "Hire Signal", tag: "Only when 0 matches", color: "amber", desc: "GPT-4o: \"No match found. Generate actionable hiring profile: seniority, skills, years, contract type.\"" },
+            ].map(s => (
+              <div key={s.num} className={`rounded-xl border p-3 flex gap-3 items-start`} style={{borderColor: "#19105B20", background: "#19105B08"}}>
+                <span className="w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0" style={{background: "#19105B"}}>{s.num}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-gray-900">{s.title}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-500">{s.tag}</span>
+                  </div>
+                  <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </section>
+
+          {/* ── Formula Visual ── */}
           <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">4</span>
-              Candidate Categories
-            </h3>
-            <div className="space-y-2">
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <div><p className="text-xs font-semibold text-emerald-800">Available</p><p className="text-[10px] text-emerald-600">Has capacity ≥ requested allocation %</p></div>
+            <h3 className="text-sm font-bold text-gray-900 mb-3">Scoring Formula</h3>
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {[
+                { label: "SKILL", weight: "×0.40", sub: "50% COE + 50% semantic", color: "#7c3aed" },
+                { label: "COMP", weight: "×0.25", sub: "Competency assessments", color: "#a855f7" },
+                { label: "AVAIL", weight: "×0.25", sub: "(100 - alloc%) / 100", color: "#059669" },
+                { label: "PROD", weight: "×0.10", sub: "Hours last 8 weeks", color: "#6b7280" },
+              ].map(f => (
+                <div key={f.label} className="p-2.5 rounded-xl border text-center" style={{borderColor: f.color + "33", background: f.color + "0a"}}>
+                  <p className="text-[10px] font-bold" style={{color: f.color}}>{f.label}</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">{f.weight}</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">{f.sub}</p>
+                </div>
+              ))}
+            </div>
+            <div className="bg-gray-900 rounded-xl p-3 font-mono text-[11px] text-gray-200 space-y-1">
+              <p><span className="text-violet-300">With comp:</span> total = skill×0.40 + comp×0.25 + avail×0.25 + prod×0.10</p>
+              <p><span className="text-violet-300">Without:</span>&nbsp; total = skill×0.65 + avail×0.25 + prod×0.10</p>
+            </div>
+          </section>
+
+          {/* ── Categories ── */}
+          <section>
+            <h3 className="text-sm font-bold text-gray-900 mb-3">Output Categories</h3>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 mb-1" />
+                <p className="text-xs font-bold text-emerald-800">Available</p>
+                <p className="text-[10px] text-emerald-600">Free capacity ≥ requested %</p>
               </div>
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100">
-                <Sparkles className="w-4 h-4 text-violet-600 shrink-0" />
-                <div><p className="text-xs font-semibold text-violet-800">Best Match</p><p className="text-[10px] text-violet-600">Allocated but strong fit (score ≥ 40%) — discuss reallocation</p></div>
+              <div className="p-3 rounded-xl bg-violet-50 border border-violet-100">
+                <Sparkles className="w-4 h-4 text-violet-600 mb-1" />
+                <p className="text-xs font-bold text-violet-800">Best Match</p>
+                <p className="text-[10px] text-violet-600">Allocated, score ≥ 40%</p>
               </div>
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-                <AlertTriangle className="w-4 h-4 text-gray-400 shrink-0" />
-                <div><p className="text-xs font-semibold text-gray-700">Stretch</p><p className="text-[10px] text-gray-500">Allocated AND weak fit — not shown in recommendations</p></div>
+              <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
+                <AlertTriangle className="w-4 h-4 text-gray-400 mb-1" />
+                <p className="text-xs font-bold text-gray-700">Stretch</p>
+                <p className="text-[10px] text-gray-500">Weak fit — hidden</p>
               </div>
             </div>
           </section>
 
-          {/* Data Sources */}
+          {/* ── Timing & Cost ── */}
+          <section className="grid grid-cols-2 gap-4">
+            <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
+              <p className="text-xs font-bold text-violet-900 mb-2">When it runs</p>
+              <div className="space-y-1 text-[11px] text-violet-800">
+                <p><strong>Nightly 2 AM IST</strong> — all roles (~28 min)</p>
+                <p><strong>Refresh button</strong> — on demand</p>
+                <p><strong>Expand role</strong> — inline ~3-7s</p>
+              </div>
+            </div>
+            <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+              <p className="text-xs font-bold text-emerald-900 mb-2">Cost</p>
+              <div className="space-y-1 text-[11px] text-emerald-800">
+                <p><strong>~$0.015</strong> per role</p>
+                <p><strong>~$3.60</strong> nightly (240 roles)</p>
+                <p>Steps 1-4 = <strong>free</strong> (SQL + math)</p>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Data Sources ── */}
           <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">5</span>
-              Data Used
-            </h3>
+            <h3 className="text-sm font-bold text-gray-900 mb-3">Data Sources</h3>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               {[
-                "employee_skills (COE assessments, 82K records)",
-                "employee_skill_embeddings (286 profiles)",
-                "allocations (active, end_date ≥ today)",
-                "timesheets (last 8 weeks productivity)",
-                "employee_competencies (196 employees)",
-                "project_embeddings (500 projects KB)",
+                "employee_skills — COE assessments (82K)",
+                "employee_skill_embeddings — 286 profiles",
+                "allocations — active, end_date ≥ today",
+                "timesheets — last 8 weeks hours",
+                "employee_competencies — 196 employees",
+                "project_embeddings — 500 projects KB",
               ].map(item => (
                 <div key={item} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-100">
                   <Database className="w-3 h-3 text-gray-400 shrink-0" />
@@ -178,108 +221,6 @@ function PipelineLogicModal({ open, onClose }: { open: boolean; onClose: () => v
             </div>
           </section>
 
-          {/* Refresh */}
-          <section className="bg-violet-50 rounded-xl p-4 border border-violet-100">
-            <p className="text-xs text-violet-800">
-              <span className="font-semibold">Nightly refresh:</span> All recommendations are pre-computed at 2:00 AM IST via APScheduler.
-              Click <span className="font-semibold">"Refresh"</span> for on-demand recompute (~7s per role, ~28 min total).
-            </p>
-          </section>
-
-          {/* Real Example */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">6</span>
-              Real Example: Sigma — Sr Sol Con
-            </h3>
-            <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-4 text-[11px]">
-              {/* Request */}
-              <div>
-                <p className="text-xs font-semibold text-gray-900 mb-1.5">The Request</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-600">
-                  <span><span className="text-gray-400">Client:</span> Sigma</span>
-                  <span><span className="text-gray-400">Solution:</span> Value Creation</span>
-                  <span><span className="text-gray-400">Role:</span> Sr Sol Con (Senior Solution Consultant)</span>
-                  <span><span className="text-gray-400">Probability:</span> 70%</span>
-                  <span className="col-span-2"><span className="text-gray-400">Skills:</span> PII handling, Scalable execution environments, Incremental loads &amp; CDC</span>
-                </div>
-              </div>
-
-              {/* Steps */}
-              <div className="border-t border-gray-200 pt-3">
-                <p className="text-xs font-semibold text-gray-900 mb-2">How AI scored top candidate (EMP11)</p>
-                <div className="space-y-2 font-mono">
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold shrink-0">①</span>
-                    <span><span className="text-gray-400">COE:</span> No &quot;Senior Solution Consultant&quot; in skills DB → fallback → <span className="font-semibold text-violet-700">Data Engineering</span></span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold shrink-0">②</span>
-                    <span><span className="text-gray-400">Skills:</span> Present in pipeline data → &quot;PII handling, CDC, Scalable execution&quot;</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold shrink-0">③</span>
-                    <span><span className="text-gray-400">Semantic:</span> Embedded role query → compared 286 profiles → EMP11 similarity = <span className="font-semibold text-emerald-600">51%</span></span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold shrink-0">④</span>
-                    <div>
-                      <span className="text-gray-400">Scoring:</span>
-                      <div className="ml-2 mt-1 space-y-0.5">
-                        <p>COE skills: avg([4,4,4,4,4]) / 5 = <span className="text-violet-700">0.80</span></p>
-                        <p>Blended skill: 50% × 0.80 + 50% × 0.51 = <span className="text-violet-700">0.655</span></p>
-                        <p>Availability: 0% allocated → 100% free = <span className="text-emerald-600">1.00</span></p>
-                        <p>Productivity: 166h / 320h expected = <span className="text-gray-700">0.52</span></p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold shrink-0">⑤</span>
-                    <div>
-                      <span className="text-gray-400">Formula:</span>
-                      <p className="ml-2 mt-0.5">0.655×0.65 + 1.00×0.25 + 0.52×0.10 = <span className="text-lg font-bold text-violet-700">73%</span></p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold shrink-0">⑥</span>
-                    <span><span className="text-gray-400">Category:</span> 100% free ≥ 100% needed → <span className="font-semibold text-emerald-600">Available ✓</span></span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold shrink-0">⑦</span>
-                    <span><span className="text-gray-400">Re-rank:</span> GPT-4o moved EMP529 (Solutions Consultant) up — closer role title match</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Result */}
-              <div className="border-t border-gray-200 pt-3">
-                <p className="text-xs font-semibold text-gray-900 mb-2">Final Output (643 employees evaluated)</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-2.5">
-                    <p className="text-[10px] font-bold text-emerald-700 mb-1">AVAILABLE</p>
-                    <p className="font-semibold text-gray-900">#1 EMP11 — 66%</p>
-                    <p className="text-gray-500">Sr Software Engineer, 100% free</p>
-                  </div>
-                  <div className="rounded-lg bg-violet-50 border border-violet-100 p-2.5">
-                    <p className="text-[10px] font-bold text-violet-700 mb-1">BEST MATCH</p>
-                    <p className="font-semibold text-gray-900">#1 EMP863 — 48%</p>
-                    <p className="text-gray-500">Sr SE, 0% free (reallocation)</p>
-                    <p className="font-semibold text-gray-900 mt-1">#2 EMP529 — 48%</p>
-                    <p className="text-gray-500">Solutions Consultant, CDC exp</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* AI value add */}
-              <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
-                <p className="text-[11px] text-violet-800">
-                  <span className="font-bold">AI Value-Add:</span> Without semantic matching, only EMP11 (free) would appear.
-                  With AI, the system surfaces EMP529/538 (Solutions Consultants with actual CDC &amp; PII experience)
-                  as reallocation candidates — something the formula alone can&apos;t detect.
-                </p>
-              </div>
-            </div>
-          </section>
         </div>
       </div>
     </div>
@@ -295,13 +236,11 @@ function CandidateCard({ candidate, rank, category }: {
   const isAvail = category === "Available";
 
   return (
-    <div className={`group relative rounded-2xl bg-white p-4 transition-all hover:shadow-md ${
-      isAvail ? "border border-emerald-100 hover:border-emerald-200" : "border border-violet-100 hover:border-violet-200"
-    }`}>
+    <div className={`group relative rounded-2xl bg-white p-4 transition-all hover:shadow-md`}
+      style={{ border: `1px solid ${isAvail ? "#19105B20" : "#FF619620"}` }}>
       <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white ${
-          isAvail ? "bg-emerald-500" : "bg-violet-500"
-        }`}>{rank}</div>
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white"
+          style={{ background: isAvail ? "#19105B" : "#FF6196" }}>{rank}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold text-gray-900 truncate">{candidate.job_name ?? candidate.employee_id}</p>
@@ -312,7 +251,7 @@ function CandidateCard({ candidate, rank, category }: {
           </p>
         </div>
         <div className="text-right">
-          <p className={`text-xl font-bold tabular-nums ${isAvail ? "text-emerald-600" : "text-violet-600"}`}>{score}%</p>
+          <p className="text-xl font-bold tabular-nums" style={{ color: isAvail ? "#19105B" : "#FF6196" }}>{score}%</p>
           <p className="text-[10px] text-gray-400">{Math.round(candidate.available_pct)}% free</p>
         </div>
       </div>
@@ -321,10 +260,10 @@ function CandidateCard({ candidate, rank, category }: {
       {/* Score pills */}
       <div className="flex items-center gap-1.5 mt-3 pl-11">
         {([
-          ["Skill", candidate.skill_score, "bg-violet-50 text-violet-600 border-violet-100"],
-          ["Comp", candidate.comp_score, "bg-purple-50 text-purple-600 border-purple-100"],
-          ["Avail", candidate.avail_score, "bg-emerald-50 text-emerald-600 border-emerald-100"],
-          ["Prod", candidate.prod_score, "bg-gray-50 text-gray-600 border-gray-100"],
+          ["Skill", candidate.skill_score, "bg-gray-50 text-gray-700 border-gray-200"],
+          ["Comp", candidate.comp_score, "bg-gray-50 text-gray-700 border-gray-200"],
+          ["Avail", candidate.avail_score, "bg-gray-50 text-gray-700 border-gray-200"],
+          ["Prod", candidate.prod_score, "bg-gray-50 text-gray-600 border-gray-200"],
         ] as [string, number | null, string][]).map(([label, val, cls]) => {
           if (val == null) return null;
           return (
@@ -415,13 +354,13 @@ function RoleRecommendations({ entry, project, role, onReload }: {
       ) : entry.data ? (
         <>
           <div className="flex items-center gap-4 text-xs text-gray-500">
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="font-semibold text-gray-700">{entry.data.available.length}</span> available
+            <span className="flex items-center gap-1.5" style={{ color: "#19105B" }}>
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span className="font-semibold">{entry.data.available.length}</span> available
             </span>
-            <span className="flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-              <span className="font-semibold text-gray-700">{entry.data.best_match.length}</span> best match
+            <span className="flex items-center gap-1.5" style={{ color: "#FF6196" }}>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="font-semibold">{entry.data.best_match.length}</span> best match
             </span>
             <span className="text-gray-300">|</span>
             <span>{entry.data.total_evaluated} evaluated</span>
@@ -429,7 +368,7 @@ function RoleRecommendations({ entry, project, role, onReload }: {
 
           {entry.data.available.length > 0 && (
             <section className="space-y-2">
-              <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
+              <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "#19105B" }}>
                 <CheckCircle2 className="w-3.5 h-3.5" /> Available ({entry.data.available.length})
               </p>
               {entry.data.available.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="Available" />)}
@@ -438,7 +377,7 @@ function RoleRecommendations({ entry, project, role, onReload }: {
 
           {entry.data.best_match.length > 0 && (
             <section className="space-y-2">
-              <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5">
+              <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "#FF6196" }}>
                 <Sparkles className="w-3.5 h-3.5" /> Best Match ({entry.data.best_match.length})
               </p>
               {entry.data.best_match.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="BestMatch" />)}
@@ -493,11 +432,11 @@ function RoleRow({ role, roleKey, project, isRoleOpen, entry, onToggleRole, onRe
         </td>
         <td className="px-3 py-3 text-center">
           {isNR ? (
-            <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-red-50 text-red-600 border border-red-100 whitespace-nowrap">Not Resourced</span>
+            <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap" style={{ background: "#FF619615", color: "#FF6196", border: "1px solid #FF619630" }}>Not Resourced</span>
           ) : isPR ? (
             <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 border border-amber-100 whitespace-nowrap">Part Resourced</span>
           ) : (
-            <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 inline-flex items-center gap-1 whitespace-nowrap">
+            <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1 whitespace-nowrap" style={{ background: "#19105B10", color: "#19105B", border: "1px solid #19105B20" }}>
               <UserCheck className="w-3 h-3" /> Resourced
             </span>
           )}
@@ -529,12 +468,12 @@ function RoleRow({ role, roleKey, project, isRoleOpen, entry, onToggleRole, onRe
           ) : (
             <div className="flex items-center gap-2 flex-wrap">
               {(entry.data?.available?.length ?? 0) > 0 && (
-                <span className="flex items-center gap-1 text-xs text-emerald-600">
+                <span className="flex items-center gap-1 text-xs" style={{ color: "#19105B" }}>
                   <CheckCircle2 className="w-3 h-3" />{entry.data!.available.length}
                 </span>
               )}
               {(entry.data?.best_match?.length ?? 0) > 0 && (
-                <span className="flex items-center gap-1 text-xs text-violet-600">
+                <span className="flex items-center gap-1 text-xs" style={{ color: "#FF6196" }}>
                   <Sparkles className="w-3 h-3" />{entry.data!.best_match.length}
                 </span>
               )}
@@ -624,7 +563,7 @@ function SendRecommendationBtn({ project, recCache }: { project: PipelineProject
             className="flex-1 max-w-xs text-xs px-3 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300" />
           <button onClick={handleSend} disabled={sending || !email}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50 transition-all"
-            style={{ background: "#7c3aed" }}>
+            style={{ background: "#19105B" }}>
             {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
             Send
           </button>
@@ -931,10 +870,10 @@ function ExtensionsView() {
                                       ) : (
                                         <div className="flex items-center gap-2">
                                           {(entry.data?.available?.length ?? 0) > 0 && (
-                                            <span className="flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="w-3 h-3" />{entry.data!.available.length}</span>
+                                            <span className="flex items-center gap-1 text-xs" style={{ color: "#19105B" }}><CheckCircle2 className="w-3 h-3" />{entry.data!.available.length}</span>
                                           )}
                                           {(entry.data?.best_match?.length ?? 0) > 0 && (
-                                            <span className="flex items-center gap-1 text-xs text-violet-600"><Sparkles className="w-3 h-3" />{entry.data!.best_match.length}</span>
+                                            <span className="flex items-center gap-1 text-xs" style={{ color: "#FF6196" }}><Sparkles className="w-3 h-3" />{entry.data!.best_match.length}</span>
                                           )}
                                         </div>
                                       )}
@@ -966,20 +905,20 @@ function ExtensionsView() {
                                         ) : entry.data ? (
                                           <>
                                             <div className="flex items-center gap-4 text-xs text-gray-500">
-                                              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /><span className="font-semibold text-gray-700">{entry.data.available.length}</span> available</span>
-                                              <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-violet-500" /><span className="font-semibold text-gray-700">{entry.data.best_match.length}</span> best match</span>
+                                              <span className="flex items-center gap-1.5" style={{ color: "#19105B" }}><CheckCircle2 className="w-3.5 h-3.5" /><span className="font-semibold">{entry.data.available.length}</span> available</span>
+                                              <span className="flex items-center gap-1.5" style={{ color: "#FF6196" }}><Sparkles className="w-3.5 h-3.5" /><span className="font-semibold">{entry.data.best_match.length}</span> best match</span>
                                               <span className="text-gray-300">|</span>
                                               <span>{entry.data.total_evaluated} evaluated</span>
                                             </div>
                                             {entry.data.available.length > 0 && (
                                               <section className="space-y-2">
-                                                <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Available ({entry.data.available.length})</p>
+                                                <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "#19105B" }}><CheckCircle2 className="w-3.5 h-3.5" /> Available ({entry.data.available.length})</p>
                                                 {entry.data.available.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="Available" />)}
                                               </section>
                                             )}
                                             {entry.data.best_match.length > 0 && (
                                               <section className="space-y-2">
-                                                <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Best Match ({entry.data.best_match.length})</p>
+                                                <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "#FF6196" }}><Sparkles className="w-3.5 h-3.5" /> Best Match ({entry.data.best_match.length})</p>
                                                 {entry.data.best_match.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="BestMatch" />)}
                                               </section>
                                             )}

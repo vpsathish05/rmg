@@ -90,3 +90,67 @@ def summary(db: Session = Depends(get_db)):
         pipeline_requests=pipeline_total or 0,
         high_probability_pipeline=pipeline_high or 0,
     )
+
+
+
+@router.get("/charts")
+def charts(db: Session = Depends(get_db)):
+    """Data for dashboard charts."""
+
+    # 1. Pipeline by deal stage
+    stage_rows = db.execute(text("""
+        SELECT COALESCE(deal_stage, 'Unknown') AS stage, COUNT(*) AS cnt
+        FROM pipeline_requests
+        GROUP BY deal_stage ORDER BY cnt DESC
+    """)).fetchall()
+    pipeline_by_stage = [{"stage": r.stage, "count": int(r.cnt)} for r in stage_rows]
+
+    # 2. Top open roles (Not Resourced)
+    role_rows = db.execute(text("""
+        SELECT UNNEST(canonical_roles) AS role, COUNT(*) AS cnt
+        FROM pipeline_requests
+        WHERE LOWER(status) = 'not resourced'
+        GROUP BY role ORDER BY cnt DESC LIMIT 8
+    """)).fetchall()
+    top_roles = [{"role": r.role, "count": int(r.cnt)} for r in role_rows]
+
+    # 3. Demand vs Supply next 6 months
+    supply_rows = db.execute(text("""
+        SELECT TO_CHAR(a.end_date, 'YYYY-MM') AS month, COUNT(DISTINCT a.employee_id) AS freeing
+        FROM allocations a
+        WHERE a.is_active = true AND a.is_active_version = true
+          AND a.end_date >= CURRENT_DATE
+          AND a.end_date < CURRENT_DATE + INTERVAL '6 months'
+        GROUP BY TO_CHAR(a.end_date, 'YYYY-MM')
+        ORDER BY month
+    """)).fetchall()
+    demand_rows = db.execute(text("""
+        SELECT TO_CHAR(likely_start_date, 'YYYY-MM') AS month, COUNT(*) AS demand
+        FROM pipeline_requests
+        WHERE likely_start_date >= CURRENT_DATE
+          AND likely_start_date < CURRENT_DATE + INTERVAL '6 months'
+          AND LOWER(status) = 'not resourced'
+        GROUP BY TO_CHAR(likely_start_date, 'YYYY-MM')
+        ORDER BY month
+    """)).fetchall()
+    supply_map = {r.month: int(r.freeing) for r in supply_rows}
+    demand_map = {r.month: int(r.demand) for r in demand_rows}
+    all_months = sorted(set(list(supply_map.keys()) + list(demand_map.keys())))
+    demand_supply = [{"month": m, "supply": supply_map.get(m, 0), "demand": demand_map.get(m, 0)} for m in all_months]
+
+    # 4. COE distribution (top 8)
+    coe_rows = db.execute(text("""
+        SELECT INITCAP(TRIM(coe)) AS coe, COUNT(DISTINCT employee_id) AS cnt
+        FROM employee_skills
+        WHERE is_assessed = true AND score IS NOT NULL AND score > 0
+          AND coe IS NOT NULL AND TRIM(coe) != ''
+        GROUP BY TRIM(coe) ORDER BY cnt DESC LIMIT 8
+    """)).fetchall()
+    coe_distribution = [{"coe": r.coe, "count": int(r.cnt)} for r in coe_rows]
+
+    return {
+        "pipeline_by_stage": pipeline_by_stage,
+        "top_roles": top_roles,
+        "demand_supply": demand_supply,
+        "coe_distribution": coe_distribution,
+    }

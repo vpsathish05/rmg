@@ -98,6 +98,20 @@ export function useDashboardSummary() {
   });
 }
 
+export interface DashboardCharts {
+  pipeline_by_stage: { stage: string; count: number }[];
+  top_roles: { role: string; count: number }[];
+  demand_supply: { month: string; supply: number; demand: number }[];
+  coe_distribution: { coe: string; count: number }[];
+}
+
+export function useDashboardCharts() {
+  return useQuery<DashboardCharts>({
+    queryKey: ["dashboard-charts"],
+    queryFn: () => api.get("/api/dashboard/charts").then((r) => r.data),
+  });
+}
+
 export function useAvailability(filters?: { status?: string; department?: string }) {
   const params = new URLSearchParams();
   if (filters?.status) params.set("status", filters.status);

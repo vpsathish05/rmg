@@ -1,13 +1,6 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
-
-const inter = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "RMG Resource Management",
@@ -16,8 +9,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`}>
-      <body className="h-full flex bg-background text-foreground antialiased">
+    <html lang="en" className="h-full">
+      <body className="h-full flex bg-background text-foreground antialiased" style={{ fontFamily: "Arial, sans-serif", color: "#19105B" }}>
         <Providers>{children}</Providers>
       </body>
     </html>

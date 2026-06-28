@@ -81,6 +81,7 @@ def get_pipeline(db: Session = Depends(get_db)):
     # Sort by account priority
     projects.sort(key=lambda p: (
         _PRIORITY_ORDER.get(p["client_priority"] or "Other", 3),
+        -(sum(1 for r in p["roles"] if r.get("status") == "Not Resourced")),
         p["likely_start_date"] or "9999",
     ))
     return projects

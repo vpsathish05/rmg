@@ -10,7 +10,7 @@ import { Sparkles, TrendingUp, Target, BarChart3, Search } from "lucide-react";
 function probColor(p: number | null): string {
   if (!p) return "#94A3B8";
   if (p >= 0.9) return "#059669";
-  if (p >= 0.7) return "#7c3aed";
+  if (p >= 0.7) return "#19105B";
   if (p >= 0.5) return "#d97706";
   return "#94A3B8";
 }
@@ -34,7 +34,7 @@ function ForecastKpi({ label, value, sub, accent, icon: Icon }: {
 
 
 const TOP_ROLES_N = 5;
-const ROLE_COLORS = ["#7c3aed", "#06b6d4", "#ec4899", "#a855f7", "#14b8a6", "#059669"];
+const ROLE_COLORS = ["#19105B", "#FF6196", "#19105B99", "#FF619699", "#19105B66", "#FF619666"];
 
 function OutlookChart({ months }: { months: OutlookMonth[] }) {
   const allRoles = useMemo(() => {
@@ -108,11 +108,11 @@ function OutlookChart({ months }: { months: OutlookMonth[] }) {
           </TableHeader>
           <TableBody>
             {months.map((m, i) => (
-              <TableRow key={m.month} className="hover:bg-violet-50/30 transition-colors">
+              <TableRow key={m.month} className="hover:bg-gray-50/50 transition-colors">
                 <TableCell className="font-mono text-sm font-medium text-gray-700">{m.month}</TableCell>
                 <TableCell className="text-sm text-gray-500">{m.roles[0]?.role ?? "—"}</TableCell>
                 <TableCell className="text-right tabular-nums text-sm text-gray-600">{m.roles.reduce((s, r) => s + r.request_count, 0)}</TableCell>
-                <TableCell className="text-right tabular-nums text-sm font-bold text-violet-600">{m.total_fte.toFixed(1)}</TableCell>
+                <TableCell className="text-right tabular-nums text-sm font-bold" style={{ color: "#19105B" }}>{m.total_fte.toFixed(1)}</TableCell>
                 <TableCell className="text-right tabular-nums text-sm text-gray-500">{m.weighted_fte.toFixed(1)}</TableCell>
               </TableRow>
             ))}
@@ -147,7 +147,7 @@ function PipelineList() {
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search client, role, solution…"
-          className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all" />
+          className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300 transition-all" />
       </div>
       <div className="rounded-2xl border border-gray-100 overflow-hidden overflow-x-auto">
         <Table>
@@ -220,9 +220,9 @@ export default function ForecastPage() {
       <div className="px-8 pt-6 pb-8 overflow-y-auto flex-1">
         {/* KPIs */}
         <div className="grid grid-cols-3 gap-4 mb-7">
-          <ForecastKpi label="Open Requests" value={total} sub="Total pipeline roles" accent="#7c3aed" icon={BarChart3} />
-          <ForecastKpi label="High Probability" value={highProb} sub="Win probability ≥ 70%" accent="#7c3aed" icon={Target} />
-          <ForecastKpi label="Avg Probability" value={`${Math.round(avgProb * 100)}%`} sub="Across all requests" accent="#a855f7" icon={TrendingUp} />
+          <ForecastKpi label="Open Requests" value={total} sub="Total pipeline roles" accent="#19105B" icon={BarChart3} />
+          <ForecastKpi label="High Probability" value={highProb} sub="Win probability ≥ 70%" accent="#19105B" icon={Target} />
+          <ForecastKpi label="Avg Probability" value={`${Math.round(avgProb * 100)}%`} sub="Across all requests" accent="#FF6196" icon={TrendingUp} />
         </div>
 
         {/* Tabs */}
