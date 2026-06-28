@@ -151,6 +151,58 @@ def get_extensions(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/extensions/needs")
+def get_extension_needs(db: Session = Depends(get_db)):
+    """Projects where resources are ending before the project ends — need replacements."""
+    rows = db.execute(text("""
+        SELECT
+            p.project_id, p.client_id, p.proposition_coe,
+            p.project_end_date, p.project_status,
+            a.employee_id, e.job_name, e.canonical_role,
+            a.end_date AS alloc_end_date,
+            a.allocation_pct,
+            a.resourcing_status,
+            (p.project_end_date - a.end_date) AS days_gap
+        FROM allocations a
+        JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+        JOIN employees e ON e.employee_id = a.employee_id AND e.is_active_version = true
+        WHERE a.is_active = true
+          AND a.is_active_version = true
+          AND a.end_date IS NOT NULL
+          AND p.project_end_date IS NOT NULL
+          AND a.end_date < p.project_end_date
+          AND a.end_date >= CURRENT_DATE - INTERVAL '30 days'
+          AND UPPER(p.project_status) = 'ACTIVE'
+        ORDER BY p.client_id, p.project_id, a.end_date
+    """)).fetchall()
+
+    # Group by project
+    from collections import defaultdict
+    projects: dict = {}
+    for r in rows:
+        key = r.project_id
+        if key not in projects:
+            projects[key] = {
+                "project_id": r.project_id,
+                "client_id": r.client_id,
+                "proposition_coe": r.proposition_coe,
+                "project_end_date": r.project_end_date.isoformat() if r.project_end_date else None,
+                "project_status": r.project_status,
+                "leaving_resources": [],
+            }
+        projects[key]["leaving_resources"].append({
+            "employee_id": r.employee_id,
+            "job_name": r.job_name,
+            "canonical_role": r.canonical_role,
+            "alloc_end_date": r.alloc_end_date.isoformat() if r.alloc_end_date else None,
+            "allocation_pct": float(r.allocation_pct) if r.allocation_pct else None,
+            "resourcing_status": r.resourcing_status,
+            "days_gap": int(r.days_gap),
+        })
+
+    return list(projects.values())
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Card 3 — Change Requests
 # ─────────────────────────────────────────────────────────────────────────────

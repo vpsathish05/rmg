@@ -252,6 +252,32 @@ export function useRmgExtensions() {
   });
 }
 
+export interface LeavingResource {
+  employee_id: string;
+  job_name: string | null;
+  canonical_role: string | null;
+  alloc_end_date: string | null;
+  allocation_pct: number | null;
+  resourcing_status: string | null;
+  days_gap: number;
+}
+
+export interface ExtensionNeedProject {
+  project_id: string;
+  client_id: string;
+  proposition_coe: string | null;
+  project_end_date: string | null;
+  project_status: string | null;
+  leaving_resources: LeavingResource[];
+}
+
+export function useExtensionNeeds() {
+  return useQuery<ExtensionNeedProject[]>({
+    queryKey: ["extension-needs"],
+    queryFn: () => api.get("/api/rmg/extensions/needs").then((r) => r.data),
+  });
+}
+
 export function useRmgEmailRequests() {
   return useQuery<EmailRequestItem[]>({
     queryKey: ["rmg-email-requests"],

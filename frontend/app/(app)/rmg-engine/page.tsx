@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useRmgPipeline, useRmgExtensions, useRmgEmailRequests, useKbStatus,
-  useRmgRecommendations, useRecCacheStatus,
+  useRmgRecommendations, useRecCacheStatus, useExtensionNeeds,
   type PipelineProject, type PipelineRole, type RmgCandidate, type KbProof,
+  type ExtensionNeedProject, type LeavingResource,
 } from "@/lib/hooks";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -772,64 +773,278 @@ function PipelineAccordion({ projects, recCache, expandedClients, expandedRoleKe
 
 // ── Extensions View ────────────────────────────────────────────────────────
 function ExtensionsView() {
-  const { data, isLoading } = useRmgExtensions();
-  const extensions = data?.allocation_extensions ?? [];
-  const emailExts = data?.email_extensions ?? [];
+  const { data: needs = [], isLoading } = useExtensionNeeds();
+  const { data: extData } = useRmgExtensions();
+  const extensions = extData?.allocation_extensions ?? [];
+  const [expandedProject, setExpandedProject] = useState<string | null>(null);
+  const [expandedResource, setExpandedResource] = useState<string | null>(null);
+  const [recCache, setRecCache] = useState<Record<string, CacheEntry>>({});
+  const loadingRef = useRef<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+
+  const loadRec = useCallback(async (key: string, resource: LeavingResource, coe: string | null) => {
+    if (loadingRef.current.has(key)) return;
+    loadingRef.current.add(key);
+    setRecCache(prev => ({ ...prev, [key]: { status: "loading" } }));
+    try {
+      const params = new URLSearchParams();
+      if (resource.canonical_role && resource.canonical_role !== "nan") params.append("canonical_roles", resource.canonical_role);
+      const { data: coeData } = await api.get(`/api/rmg/auto-coe?${params.toString()}`);
+      const detectedCoe: string | null = coeData.coe || coe;
+      if (!detectedCoe) { setRecCache(prev => ({ ...prev, [key]: { status: "error" } })); return; }
+      const { data } = await api.post("/api/rmg/recommend-role", {
+        role_code: resource.canonical_role ?? resource.job_name ?? "Unknown",
+        canonical_roles: resource.canonical_role && resource.canonical_role !== "nan" ? [resource.canonical_role] : [],
+        coe: detectedCoe,
+        allocation_pct: resource.allocation_pct ?? 100,
+        required_skills: null,
+        with_rationale: false,
+        with_kb_proof: true,
+      });
+      setRecCache(prev => ({ ...prev, [key]: { status: "done", coe: detectedCoe, data } }));
+    } catch {
+      setRecCache(prev => ({ ...prev, [key]: { status: "error" } }));
+    }
+  }, []);
+
+  const handleToggleResource = useCallback((key: string, resource: LeavingResource, coe: string | null) => {
+    setExpandedResource(prev => {
+      if (prev === key) return null;
+      loadRec(key, resource, coe);
+      return key;
+    });
+  }, [loadRec]);
+
+  const filtered = useMemo(() => {
+    if (!search) return needs;
+    const q = search.toLowerCase();
+    return needs.filter(p => p.client_id.toLowerCase().includes(q) || p.project_id.toLowerCase().includes(q));
+  }, [needs, search]);
+
+  const totalLeaving = needs.reduce((n, p) => n + p.leaving_resources.length, 0);
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-      <section>
-        <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-violet-500" />
-          Allocation Extensions ({extensions.length})
-        </h2>
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      {/* Toolbar */}
+      <div className="px-6 py-3 shrink-0 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-xs">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search project / client…"
+              className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all" />
+          </div>
+          <span className="text-xs font-semibold ml-auto tabular-nums text-violet-600 bg-violet-50 px-3 py-1.5 rounded-full">
+            {totalLeaving} leaving
+          </span>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-3">
         {isLoading ? (
-          <div className="text-xs text-gray-400 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</div>
-        ) : extensions.length === 0 ? (
-          <div className="text-sm text-gray-400 py-10 text-center">No extended allocations</div>
+          <div className="flex items-center justify-center py-20 gap-2 text-sm text-gray-400">
+            <Loader2 className="w-5 h-5 animate-spin text-violet-400" /> Loading…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+            <Users className="w-10 h-10 mb-3 opacity-30" />
+            <p className="text-sm font-medium">No resource gaps found</p>
+          </div>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-gray-100">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-gray-50 text-gray-500 uppercase text-[10px] tracking-wider">
-                  {["Project", "Client", "COE", "Project End", "Alloc End", "Extended", "HC"].map(h => (
-                    <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {extensions.slice(0, 50).map((e, i) => (
-                  <tr key={e.project_id} className="hover:bg-violet-50/30 transition-colors">
-                    <td className="px-4 py-3 font-mono text-[11px] text-gray-700">{e.project_id}</td>
-                    <td className="px-4 py-3 text-gray-600">{e.client_id}</td>
-                    <td className="px-4 py-3 text-gray-500">{e.proposition_coe ?? "—"}</td>
-                    <td className="px-4 py-3 tabular-nums text-gray-500">{e.project_end_date ? new Date(e.project_end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}</td>
-                    <td className="px-4 py-3 tabular-nums text-gray-500">{e.max_alloc_end_date ? new Date(e.max_alloc_end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}</td>
-                    <td className="px-4 py-3 tabular-nums font-bold text-violet-600">+{e.days_extended}d</td>
-                    <td className="px-4 py-3 tabular-nums text-gray-600">{e.headcount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Resource Needs Accordion */}
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Users className="w-4 h-4 text-violet-500" />
+                Resource Needs — Replacement Required ({totalLeaving})
+              </h2>
+              {filtered.map(project => {
+                const isOpen = expandedProject === project.project_id;
+                return (
+                  <div key={project.project_id} className={`rounded-2xl overflow-hidden border transition-all ${isOpen ? "border-violet-200 shadow-sm" : "border-gray-100 hover:border-gray-200"}`}>
+                    <button onClick={() => setExpandedProject(isOpen ? null : project.project_id)}
+                      className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-all ${isOpen ? "bg-gradient-to-r from-violet-50/50 to-white" : "bg-white hover:bg-gray-50/50"}`}>
+                      {isOpen ? <ChevronDown className="w-4 h-4 text-violet-500 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-sm font-bold text-gray-900 truncate">{project.client_id}</span>
+                          {project.proposition_coe && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-100">{project.proposition_coe}</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-0.5">{project.project_id}</p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {project.project_end_date && (
+                          <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            Ends {new Date(project.project_end_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" })}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">
+                          {project.leaving_resources.length} leaving
+                        </span>
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-t border-gray-100 bg-gray-50/50">
+                              <th className="px-4 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wider text-[10px]">Employee</th>
+                              <th className="px-3 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wider text-[10px]">Role</th>
+                              <th className="px-3 py-2.5 text-center font-semibold text-gray-500 uppercase tracking-wider text-[10px]">Alloc</th>
+                              <th className="px-3 py-2.5 text-center font-semibold text-gray-500 uppercase tracking-wider text-[10px]">Ends</th>
+                              <th className="px-3 py-2.5 text-center font-semibold text-gray-500 uppercase tracking-wider text-[10px]">Gap</th>
+                              <th className="px-4 py-2.5 text-left font-semibold text-gray-500 uppercase tracking-wider text-[10px]">Replacement</th>
+                              <th className="w-8" />
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {project.leaving_resources.map(res => {
+                              const resKey = `${project.project_id}::${res.employee_id}`;
+                              const isResOpen = expandedResource === resKey;
+                              const entry = recCache[resKey];
+                              return (
+                                <React.Fragment key={res.employee_id}>
+                                  <tr onClick={() => handleToggleResource(resKey, res, project.proposition_coe)}
+                                    className={`cursor-pointer transition-all hover:bg-violet-50/30 ${isResOpen ? "bg-violet-50/40" : ""}`}>
+                                    <td className="px-4 py-3">
+                                      <p className="text-sm font-semibold text-gray-900">{res.job_name && res.job_name !== "nan" ? res.job_name : res.employee_id}</p>
+                                      <p className="text-[10px] text-gray-400 font-mono">{res.employee_id}</p>
+                                    </td>
+                                    <td className="px-3 py-3 text-gray-600">{res.canonical_role && res.canonical_role !== "nan" ? res.canonical_role : "—"}</td>
+                                    <td className="px-3 py-3 text-center tabular-nums text-gray-500">{res.allocation_pct != null ? `${res.allocation_pct}%` : "—"}</td>
+                                    <td className="px-3 py-3 text-center tabular-nums text-gray-500">
+                                      {res.alloc_end_date ? new Date(res.alloc_end_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}
+                                    </td>
+                                    <td className="px-3 py-3 text-center">
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">{res.days_gap}d</span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      {!entry || entry.status === "loading" ? (
+                                        <span className="flex items-center gap-1.5 text-xs text-gray-400"><Loader2 className="w-3 h-3 animate-spin" /> Scoring…</span>
+                                      ) : entry.status === "error" ? (
+                                        <span className="flex items-center gap-1.5 text-xs text-red-500"><AlertTriangle className="w-3 h-3" /> Failed</span>
+                                      ) : entry.data?.no_resource ? (
+                                        <span className="flex items-center gap-1.5 text-xs text-amber-600"><AlertTriangle className="w-3 h-3" /> Hire signal</span>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          {(entry.data?.available?.length ?? 0) > 0 && (
+                                            <span className="flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="w-3 h-3" />{entry.data!.available.length}</span>
+                                          )}
+                                          {(entry.data?.best_match?.length ?? 0) > 0 && (
+                                            <span className="flex items-center gap-1 text-xs text-violet-600"><Sparkles className="w-3 h-3" />{entry.data!.best_match.length}</span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className="pr-3 py-3 w-8">
+                                      {isResOpen ? <ChevronDown className="w-4 h-4 text-violet-500" /> : <ChevronRight className="w-4 h-4 text-gray-300" />}
+                                    </td>
+                                  </tr>
+                                  {isResOpen && (
+                                    <tr><td colSpan={7} className="p-0">
+                                      <div className="px-6 pb-5 pt-4 space-y-4 bg-gradient-to-b from-gray-50/80 to-white">
+                                        <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-gray-100">
+                                          {entry?.coe && <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700">{entry.coe}</span>}
+                                          <span className="text-xs text-gray-500 bg-white px-2.5 py-1 rounded-full border border-gray-200">
+                                            Replacing {res.canonical_role && res.canonical_role !== "nan" ? res.canonical_role : res.employee_id}
+                                          </span>
+                                          {res.allocation_pct != null && <span className="text-xs text-gray-500 bg-white px-2.5 py-1 rounded-full border border-gray-200">{res.allocation_pct}% alloc</span>}
+                                        </div>
+                                        {!entry || entry.status === "loading" ? (
+                                          <div className="flex items-center gap-3 py-10 justify-center text-gray-400">
+                                            <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
+                                            <span className="text-sm font-medium">Scoring candidates…</span>
+                                          </div>
+                                        ) : entry.status === "error" ? (
+                                          <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-50 border border-red-100">
+                                            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                                            <p className="text-sm font-semibold text-red-800">Could not load recommendations</p>
+                                          </div>
+                                        ) : entry.data ? (
+                                          <>
+                                            <div className="flex items-center gap-4 text-xs text-gray-500">
+                                              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /><span className="font-semibold text-gray-700">{entry.data.available.length}</span> available</span>
+                                              <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-violet-500" /><span className="font-semibold text-gray-700">{entry.data.best_match.length}</span> best match</span>
+                                              <span className="text-gray-300">|</span>
+                                              <span>{entry.data.total_evaluated} evaluated</span>
+                                            </div>
+                                            {entry.data.available.length > 0 && (
+                                              <section className="space-y-2">
+                                                <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Available ({entry.data.available.length})</p>
+                                                {entry.data.available.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="Available" />)}
+                                              </section>
+                                            )}
+                                            {entry.data.best_match.length > 0 && (
+                                              <section className="space-y-2">
+                                                <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Best Match ({entry.data.best_match.length})</p>
+                                                {entry.data.best_match.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="BestMatch" />)}
+                                              </section>
+                                            )}
+                                            {entry.data.no_resource && (
+                                              <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-100">
+                                                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                                <div>
+                                                  <p className="text-xs font-semibold text-amber-900">No Resource — Hire Signal</p>
+                                                  <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">{entry.data.hire_signal}</p>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </>
+                                        ) : null}
+                                      </div>
+                                    </td></tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </section>
+
+            {/* Over-Extended (existing awareness table) */}
+            {extensions.length > 0 && (
+              <section className="mt-6">
+                <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-violet-500" />
+                  Over-Extended Allocations ({extensions.length})
+                </h2>
+                <div className="overflow-x-auto rounded-2xl border border-gray-100">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500 uppercase text-[10px] tracking-wider">
+                        {["Project", "Client", "COE", "Project End", "Alloc End", "Extended", "HC"].map(h => (
+                          <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {extensions.slice(0, 30).map(e => (
+                        <tr key={e.project_id} className="hover:bg-violet-50/30 transition-colors">
+                          <td className="px-4 py-3 font-mono text-[11px] text-gray-700">{e.project_id}</td>
+                          <td className="px-4 py-3 text-gray-600">{e.client_id}</td>
+                          <td className="px-4 py-3 text-gray-500">{e.proposition_coe ?? "—"}</td>
+                          <td className="px-4 py-3 tabular-nums text-gray-500">{e.project_end_date ? new Date(e.project_end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}</td>
+                          <td className="px-4 py-3 tabular-nums text-gray-500">{e.max_alloc_end_date ? new Date(e.max_alloc_end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}</td>
+                          <td className="px-4 py-3 tabular-nums font-bold text-violet-600">+{e.days_extended}d</td>
+                          <td className="px-4 py-3 tabular-nums text-gray-600">{e.headcount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+          </>
         )}
-      </section>
-      {emailExts.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Mail className="w-4 h-4 text-violet-500" /> Email Extensions ({emailExts.length})
-          </h2>
-          <div className="space-y-2">
-            {emailExts.map(e => (
-              <div key={e.id} className="border border-gray-100 rounded-xl p-3 text-xs flex items-center gap-3 hover:bg-gray-50 transition-colors">
-                <span className="text-gray-600">{e.source_email}</span>
-                <span className="text-gray-400">{e.received_at ? new Date(e.received_at).toLocaleDateString() : "—"}</span>
-                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 font-medium">{e.status}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      </div>
     </div>
   );
 }
