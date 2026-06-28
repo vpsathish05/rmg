@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.routers import employees, projects, allocations, recommend, forecast, health, dashboard
-from app.routers import webhooks, rmg_engine
+from app.routers import webhooks, rmg_engine, resource_map
 
 log = logging.getLogger(__name__)
 
@@ -113,5 +113,6 @@ app.include_router(projects.router,     prefix="/api/projects",   tags=["project
 app.include_router(allocations.router,  prefix="/api/allocations", tags=["allocations"])
 app.include_router(recommend.router,    prefix="/api/recommend",  tags=["recommend"])
 app.include_router(forecast.router,     prefix="/api/forecast",   tags=["forecast"])
-app.include_router(rmg_engine.router,   prefix="/api/rmg",        tags=["rmg-engine"])
+app.include_router(rmg_engine.router,   prefix="/api/rmg",          tags=["rmg-engine"])
+app.include_router(resource_map.router, prefix="/api/resource-map", tags=["resource-map"])
 app.include_router(webhooks.router,     prefix="/api/webhooks/email", tags=["webhooks"])

@@ -1,38 +1,189 @@
 "use client";
 import { useState, useMemo } from "react";
-import Link from "next/link";
-import { useForecast, useForecastOutlook, type OutlookMonth } from "@/lib/hooks";
+import { useForecast, useForecastOutlook, useForecastInsights, type OutlookMonth } from "@/lib/hooks";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Sparkles, TrendingUp, Target, BarChart3, Search } from "lucide-react";
+import { Sparkles, TrendingUp, Target, BarChart3, Search, AlertTriangle, Clock, DollarSign, Users, Calendar } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  AreaChart, Area, LineChart, Line, CartesianGrid, Legend,
+} from "recharts";
 
-function probColor(p: number | null): string {
-  if (!p) return "#94A3B8";
-  if (p >= 0.9) return "#059669";
-  if (p >= 0.7) return "#19105B";
-  if (p >= 0.5) return "#d97706";
-  return "#94A3B8";
-}
+export default function ForecastPage() {
+  const [tab, setTab] = useState<"insights" | "pipeline" | "outlook">("insights");
+  const { data: pipelineData } = useForecast();
+  const { data: outlookData = [], isLoading: outlookLoading } = useForecastOutlook();
+  const { data: insights } = useForecastInsights();
 
-function ForecastKpi({ label, value, sub, accent, icon: Icon }: {
-  label: string; value: string | number; sub?: string; accent: string; icon: React.ElementType;
-}) {
+  const total = pipelineData?.length ?? 0;
+  const highProb = pipelineData?.filter(r => (r.probability_weight ?? 0) >= 0.7).length ?? 0;
+
   return (
-    <div className="bg-white rounded-2xl p-5 border border-gray-100 hover:shadow-md transition-all">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: `${accent}12` }}>
-          <Icon className="w-4 h-4" style={{ color: accent }} />
-        </div>
+    <div className="flex flex-col h-full">
+      <div className="px-8 py-5 bg-white border-b border-gray-100 shrink-0">
+        <h1 className="text-xl font-bold" style={{ color: "#19105B" }}>Forecast</h1>
+        <p className="text-xs text-gray-400 mt-0.5">{total} resource requests · {highProb} high probability</p>
       </div>
-      <p className="text-4xl font-bold tabular-nums text-gray-900">{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+
+      <div className="px-6 pt-4 pb-8 overflow-y-auto flex-1 space-y-5">
+        {/* Alerts */}
+        {insights?.alerts && insights.alerts.length > 0 && (
+          <div className="space-y-2">
+            {insights.alerts.map((a, i) => (
+              <div key={i} className="rounded-xl p-3 flex items-center gap-3 border" style={{
+                background: a.type === "urgent" ? "#FF61960a" : a.type === "revenue" ? "#19105B08" : "#19105B05",
+                borderColor: a.type === "urgent" ? "#FF619630" : "#19105B15",
+              }}>
+                <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: a.type === "urgent" ? "#FF6196" : "#19105B" }} />
+                <span className="text-xs font-medium" style={{ color: "#19105B" }}>{a.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl p-4 border border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Revenue at Risk</p>
+              <DollarSign className="w-4 h-4" style={{ color: "#FF6196" }} />
+            </div>
+            <p className="text-2xl font-bold tabular-nums" style={{ color: "#FF6196" }}>
+              ${((insights?.revenue_at_risk ?? 0) / 1000).toFixed(0)}K
+            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Unresourced weighted pipeline</p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Unresourced</p>
+              <Users className="w-4 h-4" style={{ color: "#19105B" }} />
+            </div>
+            <p className="text-2xl font-bold tabular-nums" style={{ color: "#19105B" }}>{insights?.unresourced_roles ?? 0}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">{insights?.weighted_fte?.toFixed(1) ?? 0} weighted FTE</p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">High Probability</p>
+              <Target className="w-4 h-4" style={{ color: "#19105B" }} />
+            </div>
+            <p className="text-2xl font-bold tabular-nums" style={{ color: "#19105B" }}>{highProb}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Win probability ≥ 70%</p>
+          </div>
+          <div className="bg-white rounded-2xl p-4 border border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Hot Deals</p>
+              <Calendar className="w-4 h-4" style={{ color: "#FF6196" }} />
+            </div>
+            <p className="text-2xl font-bold tabular-nums" style={{ color: "#FF6196" }}>{insights?.hot_deals?.length ?? 0}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Starting within 3 months</p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+          {([
+            { key: "insights", label: "Insights", icon: Sparkles },
+            { key: "pipeline", label: "Pipeline", icon: BarChart3 },
+            { key: "outlook", label: "6-Month Outlook", icon: TrendingUp },
+          ] as const).map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+                tab === t.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              }`}>
+              <t.icon className="w-3.5 h-3.5" /> {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "insights" && insights && <InsightsView insights={insights} />}
+        {tab === "pipeline" && <PipelineList />}
+        {tab === "outlook" && (outlookLoading
+          ? <div className="py-12 text-sm text-gray-400 flex items-center gap-2"><TrendingUp className="w-4 h-4 animate-pulse" /> Loading…</div>
+          : <OutlookChart months={outlookData} />
+        )}
+      </div>
     </div>
   );
 }
 
 
+// ── Insights View ──────────────────────────────────────────────────────────
+function InsightsView({ insights }: { insights: NonNullable<ReturnType<typeof useForecastInsights>["data"]> }) {
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Capacity Gap */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Capacity Gap (Next 3 Months)</h3>
+          <p className="text-[10px] text-gray-400 mb-3">Demand FTE vs bench availability by role</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={insights.capacity_gap} layout="vertical" margin={{ left: 0, right: 16 }}>
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis type="category" dataKey="role" tick={{ fontSize: 10 }} width={110} />
+                <Tooltip />
+                <Bar dataKey="demand" fill="#19105B" name="Demand FTE" barSize={10} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="bench" fill="#FF6196" name="Bench" barSize={10} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Funnel by Stage */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Pipeline Funnel (Not Resourced)</h3>
+          <p className="text-[10px] text-gray-400 mb-3">Roles by deal stage — weighted FTE</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={insights.funnel} layout="vertical" margin={{ left: 0, right: 16 }}>
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis type="category" dataKey="stage" tick={{ fontSize: 10 }} width={100} />
+                <Tooltip />
+                <Bar dataKey="weighted_fte" name="Weighted FTE" barSize={16} radius={[0, 6, 6, 0]}>
+                  {insights.funnel.map((_, i) => (
+                    <Cell key={i} fill={i === 0 ? "#19105B" : i === 1 ? "#19105BCC" : i === 2 ? "#19105B99" : "#19105B66"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Hot Deals Timeline */}
+      <div className="bg-white rounded-2xl p-5 border border-gray-100">
+        <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Hot Deals — Starting Soon (≥70% probability)</h3>
+        <p className="text-[10px] text-gray-400 mb-4">Unresourced roles with high win probability, ordered by start date</p>
+        {insights.hot_deals.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-8">No high-probability deals starting within 3 months</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {insights.hot_deals.map((d, i) => (
+              <div key={i} className="rounded-xl border p-3 flex flex-col gap-1" style={{ borderColor: "#FF619630", background: "#FF61960a" }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold" style={{ color: "#19105B" }}>{d.client}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#19105B", color: "#fff" }}>
+                    {d.probability ? `${Math.round(d.probability * 100)}%` : "—"}
+                  </span>
+                </div>
+                <span className="text-[11px] text-gray-600">{d.role}</span>
+                <div className="flex items-center gap-3 text-[10px] text-gray-400 mt-1">
+                  {d.start_date && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(d.start_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
+                  {d.duration_weeks && <span>{d.duration_weeks}w</span>}
+                  <span>{d.allocation_pct}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ── Outlook Chart (existing, unchanged) ────────────────────────────────────
 const TOP_ROLES_N = 5;
 const ROLE_COLORS = ["#19105B", "#FF6196", "#19105B99", "#FF619699", "#19105B66", "#FF619666"];
 
@@ -44,6 +195,16 @@ function OutlookChart({ months }: { months: OutlookMonth[] }) {
   }, [months]);
   const maxFte = useMemo(() => Math.max(...months.map(m => m.total_fte), 1), [months]);
 
+  const revenueData = useMemo(() => {
+    const RATE = 12000;
+    return months.map(m => ({
+      month: m.month.slice(5),
+      raw_fte: m.total_fte,
+      weighted_fte: m.weighted_fte,
+      revenue: Math.round(m.weighted_fte * RATE / 1000),
+    }));
+  }, [months]);
+
   if (!months.length) return <div className="py-20 text-center text-sm text-gray-400">No pipeline starts in the next 6 months.</div>;
 
   const BAR_H = 180, BAR_W = 56, GAP = 28, LABEL_H = 36;
@@ -51,7 +212,46 @@ function OutlookChart({ months }: { months: OutlookMonth[] }) {
   const svgH = BAR_H + LABEL_H + 24;
 
   return (
-    <div>
+    <div className="space-y-6">
+      {/* Revenue Projection + FTE Gap */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Revenue Projection (Weighted)</h3>
+          <p className="text-[10px] text-gray-400 mb-3">Monthly potential revenue at $12K/FTE — probability-weighted</p>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={revenueData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f5" />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${v}K`} />
+                <Tooltip formatter={(v: number) => `$${v}K`} />
+                <Area type="monotone" dataKey="revenue" stroke="#19105B" fill="#19105B20" strokeWidth={2} name="Revenue ($K)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Raw vs Weighted FTE</h3>
+          <p className="text-[10px] text-gray-400 mb-3">Total requested FTE vs probability-adjusted reality</p>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={revenueData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f5" />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="raw_fte" stroke="#19105B" strokeWidth={2} dot={{ r: 3 }} name="Raw FTE (requested)" />
+                <Line type="monotone" dataKey="weighted_fte" stroke="#FF6196" strokeWidth={2} dot={{ r: 3 }} name="Weighted FTE (likely)" strokeDasharray="5 5" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Existing stacked bar */}
+      <div className="bg-white rounded-2xl p-5 border border-gray-100">
+        <h3 className="text-xs font-bold mb-3" style={{ color: "#19105B" }}>FTE Demand by Role</h3>
       <div className="flex flex-wrap gap-4 mb-5">
         {allRoles.map((role, i) => (
           <div key={role} className="flex items-center gap-2 text-xs text-gray-500">
@@ -92,38 +292,13 @@ function OutlookChart({ months }: { months: OutlookMonth[] }) {
           <line x1={0} y1={BAR_H} x2={svgW} y2={BAR_H} stroke="#d1d5db" strokeWidth={1.5} />
         </svg>
       </div>
-
-
-      {/* Summary table */}
-      <div className="mt-6 rounded-2xl border border-gray-100 overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50">
-              <TableHead className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Month</TableHead>
-              <TableHead className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Top Role</TableHead>
-              <TableHead className="text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400">Requests</TableHead>
-              <TableHead className="text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400">Total FTE</TableHead>
-              <TableHead className="text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400">Weighted</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {months.map((m, i) => (
-              <TableRow key={m.month} className="hover:bg-gray-50/50 transition-colors">
-                <TableCell className="font-mono text-sm font-medium text-gray-700">{m.month}</TableCell>
-                <TableCell className="text-sm text-gray-500">{m.roles[0]?.role ?? "—"}</TableCell>
-                <TableCell className="text-right tabular-nums text-sm text-gray-600">{m.roles.reduce((s, r) => s + r.request_count, 0)}</TableCell>
-                <TableCell className="text-right tabular-nums text-sm font-bold" style={{ color: "#19105B" }}>{m.total_fte.toFixed(1)}</TableCell>
-                <TableCell className="text-right tabular-nums text-sm text-gray-500">{m.weighted_fte.toFixed(1)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
       </div>
     </div>
   );
 }
 
 
+// ── Pipeline List (existing) ───────────────────────────────────────────────
 function PipelineList() {
   const [search, setSearch] = useState("");
   const { data, isLoading } = useForecast();
@@ -147,105 +322,44 @@ function PipelineList() {
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search client, role, solution…"
-          className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-gray-50 border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300 transition-all" />
+          className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-gray-50 border border-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300 transition-all" style={{ color: "#19105B" }} />
       </div>
       <div className="rounded-2xl border border-gray-100 overflow-hidden overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <TableHead className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Client</TableHead>
-              <TableHead className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Role</TableHead>
-              <TableHead className="text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400">Alloc</TableHead>
-              <TableHead className="text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400">SOW</TableHead>
-              <TableHead className="text-right text-[10px] font-semibold uppercase tracking-wider text-gray-400">Prob</TableHead>
-              <TableHead className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Start</TableHead>
-              <TableHead className="text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400">Weeks</TableHead>
-              <TableHead className="w-8" />
+              {["Client", "Role", "Alloc", "SOW", "Prob", "Start", "Weeks"].map(h => (
+                <TableHead key={h} className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{h}</TableHead>
+              ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-12 text-gray-400 text-sm">No results</TableCell></TableRow>
-            ) : filtered.map(r => {
-              const findUrl = r.role_code_raw ? `/recommend?role_code=${encodeURIComponent(r.role_code_raw)}` : null;
-              return (
-                <TableRow key={r.id} className="hover:bg-violet-50/30 transition-colors">
-                  <TableCell>
-                    <p className="text-sm font-semibold text-gray-900">{r.client_name ?? "—"}</p>
-                    <p className="text-[10px] text-gray-400">{r.solution ?? ""}</p>
-                  </TableCell>
-                  <TableCell className="text-sm font-mono text-gray-700">{r.role_code_raw ?? "—"}</TableCell>
-                  <TableCell className="text-center tabular-nums text-sm text-gray-500">{r.allocation_pct != null ? `${r.allocation_pct}%` : "—"}</TableCell>
-                  <TableCell className="text-center">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${r.sow_signed ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-gray-50 text-gray-400 border border-gray-100"}`}>
-                      {r.sow_signed ? "Yes" : "No"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-sm font-bold" style={{ color: probColor(r.probability_weight) }}>
-                    {r.probability_weight != null ? `${Math.round(r.probability_weight * 100)}%` : "—"}
-                  </TableCell>
-                  <TableCell className="text-xs text-gray-500">{r.likely_start_date ?? "—"}</TableCell>
-                  <TableCell className="text-center tabular-nums text-sm text-gray-500">{r.duration_weeks ?? "—"}</TableCell>
-                  <TableCell>
-                    {findUrl && <Link href={findUrl}><Sparkles className="w-3.5 h-3.5 text-gray-300 hover:text-violet-500 transition-colors" /></Link>}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+              <TableRow><TableCell colSpan={7} className="text-center py-12 text-gray-400 text-xs">No results</TableCell></TableRow>
+            ) : filtered.map(r => (
+              <TableRow key={r.id} className="hover:bg-gray-50/50 transition-colors">
+                <TableCell>
+                  <p className="text-xs font-semibold" style={{ color: "#19105B" }}>{r.client_name ?? "—"}</p>
+                  <p className="text-[10px] text-gray-400">{r.solution ?? ""}</p>
+                </TableCell>
+                <TableCell className="text-xs font-mono text-gray-700">{r.role_code_raw ?? "—"}</TableCell>
+                <TableCell className="text-center tabular-nums text-xs text-gray-500">{r.allocation_pct != null ? `${r.allocation_pct}%` : "—"}</TableCell>
+                <TableCell className="text-center">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${r.sow_signed ? "text-white" : "bg-gray-50 text-gray-400 border border-gray-100"}`}
+                    style={r.sow_signed ? { background: "#19105B" } : undefined}>
+                    {r.sow_signed ? "Yes" : "No"}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-xs font-bold" style={{ color: (r.probability_weight ?? 0) >= 0.7 ? "#19105B" : "#94A3B8" }}>
+                  {r.probability_weight != null ? `${Math.round(r.probability_weight * 100)}%` : "—"}
+                </TableCell>
+                <TableCell className="text-xs text-gray-500">{r.likely_start_date ?? "—"}</TableCell>
+                <TableCell className="text-center tabular-nums text-xs text-gray-500">{r.duration_weeks ?? "—"}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </div>
     </>
-  );
-}
-
-
-export default function ForecastPage() {
-  const [tab, setTab] = useState<"pipeline" | "outlook">("pipeline");
-  const { data: pipelineData } = useForecast();
-  const { data: outlookData = [], isLoading: outlookLoading } = useForecastOutlook();
-
-  const total = pipelineData?.length ?? 0;
-  const highProb = pipelineData?.filter(r => (r.probability_weight ?? 0) >= 0.7).length ?? 0;
-  const avgProb = pipelineData?.length ? pipelineData.reduce((s, r) => s + (r.probability_weight ?? 0), 0) / pipelineData.length : 0;
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-8 py-6 bg-white border-b border-gray-100">
-        <h1 className="text-xl font-bold text-gray-900">Forecast</h1>
-        <p className="text-sm text-gray-400 mt-0.5">{total} resource requests · {highProb} high probability</p>
-      </div>
-
-      <div className="px-8 pt-6 pb-8 overflow-y-auto flex-1">
-        {/* KPIs */}
-        <div className="grid grid-cols-3 gap-4 mb-7">
-          <ForecastKpi label="Open Requests" value={total} sub="Total pipeline roles" accent="#19105B" icon={BarChart3} />
-          <ForecastKpi label="High Probability" value={highProb} sub="Win probability ≥ 70%" accent="#19105B" icon={Target} />
-          <ForecastKpi label="Avg Probability" value={`${Math.round(avgProb * 100)}%`} sub="Across all requests" accent="#FF6196" icon={TrendingUp} />
-        </div>
-
-        {/* Tabs */}
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl w-fit mb-6">
-          {([
-            { key: "pipeline", label: "Pipeline Requests", icon: BarChart3 },
-            { key: "outlook", label: "6-Month Outlook", icon: TrendingUp },
-          ] as const).map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
-                tab === t.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-              }`}>
-              <t.icon className="w-3.5 h-3.5" /> {t.label}
-            </button>
-          ))}
-        </div>
-
-        {tab === "pipeline" && <PipelineList />}
-        {tab === "outlook" && (outlookLoading
-          ? <div className="py-12 text-sm text-gray-400 flex items-center gap-2"><TrendingUp className="w-4 h-4 animate-pulse" /> Loading…</div>
-          : <OutlookChart months={outlookData} />
-        )}
-      </div>
-    </div>
   );
 }

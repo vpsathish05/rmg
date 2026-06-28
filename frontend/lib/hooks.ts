@@ -167,6 +167,96 @@ export function useForecastOutlook() {
   });
 }
 
+export interface ForecastInsights {
+  funnel: { stage: string; roles: number; weighted_fte: number }[];
+  capacity_gap: { role: string; demand: number; bench: number; gap: number }[];
+  revenue_at_risk: number;
+  unresourced_roles: number;
+  weighted_fte: number;
+  hot_deals: { client: string; role: string; probability: number | null; start_date: string | null; duration_weeks: number | null; allocation_pct: number }[];
+  alerts: { type: string; message: string }[];
+}
+
+export function useForecastInsights() {
+  return useQuery<ForecastInsights>({
+    queryKey: ["forecast-insights"],
+    queryFn: () => api.get("/api/forecast/insights").then((r) => r.data),
+  });
+}
+
+// ── Resource Map ──────────────────────────────────────────────────────────────
+
+export interface NetworkNode {
+  id: string;
+  client: string;
+  coe: string | null;
+  team_size: number;
+  start: string | null;
+  end: string | null;
+}
+
+export interface NetworkLink {
+  source: string;
+  target: string;
+  shared: number;
+}
+
+export interface NetworkData {
+  nodes: NetworkNode[];
+  links: NetworkLink[];
+}
+
+export interface TimelineResource {
+  employee_id: string;
+  job_name: string | null;
+  canonical_role: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  allocation_pct: number | null;
+  status: string | null;
+}
+
+export interface TimelineData {
+  project: { id: string; client: string; coe: string | null; start: string | null; end: string | null; status: string | null } | null;
+  resources: TimelineResource[];
+}
+
+export function useResourceNetwork() {
+  return useQuery<NetworkData>({
+    queryKey: ["resource-network"],
+    queryFn: () => api.get("/api/resource-map/network").then((r) => r.data),
+  });
+}
+
+export function useResourceTimeline(projectId: string | null) {
+  return useQuery<TimelineData>({
+    queryKey: ["resource-timeline", projectId],
+    queryFn: () => api.get(`/api/resource-map/timeline/${projectId}`).then((r) => r.data),
+    enabled: !!projectId,
+  });
+}
+
+export interface EmployeeTimeline {
+  employee: { id: string; job_name: string | null; canonical_role: string | null; department: string | null; location: string | null } | null;
+  allocations: { project_id: string; client: string; coe: string | null; start_date: string | null; end_date: string | null; allocation_pct: number | null; status: string | null; project_status: string | null }[];
+}
+
+export function useEmployeeTimeline(employeeId: string | null) {
+  return useQuery<EmployeeTimeline>({
+    queryKey: ["employee-timeline", employeeId],
+    queryFn: () => api.get(`/api/resource-map/employee/${employeeId}`).then((r) => r.data),
+    enabled: !!employeeId,
+  });
+}
+
+export function useEmployeeSearch(q: string) {
+  return useQuery<{ id: string; job_name: string | null; role: string | null }[]>({
+    queryKey: ["employee-search", q],
+    queryFn: () => api.get(`/api/resource-map/employees/search?q=${encodeURIComponent(q)}`).then((r) => r.data),
+    enabled: q.length >= 2,
+  });
+}
+
 // ── RMG Engine ────────────────────────────────────────────────────────────────
 
 export interface PipelineRole {

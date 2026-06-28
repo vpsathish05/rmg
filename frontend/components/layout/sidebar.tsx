@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, TrendingUp, Cpu, LogOut } from "lucide-react";
+import { LayoutDashboard, TrendingUp, Cpu, LogOut, Network } from "lucide-react";
 import { logout } from "@/lib/actions";
 
 const NAV = [
-  { href: "/rmg-engine", label: "Engine",     icon: Cpu },
-  { href: "/forecast",   label: "Forecast",    icon: TrendingUp },
-  { href: "/",           label: "Dashboard",   icon: LayoutDashboard },
+  { href: "/rmg-engine",    label: "Engine",       icon: Cpu },
+  { href: "/forecast",      label: "Forecast",     icon: TrendingUp },
+  { href: "/resource-map",  label: "Resource Map", icon: Network },
+  { href: "/",              label: "Dashboard",    icon: LayoutDashboard },
 ];
 
 export default function Sidebar({ userName = "RMG User" }: { userName?: string }) {
