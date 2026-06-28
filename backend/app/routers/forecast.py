@@ -63,15 +63,21 @@ def forecast_insights(db: Session = Depends(get_db)):
 
     # 1. Funnel by deal stage
     funnel_rows = db.execute(text("""
-        SELECT COALESCE(deal_stage, 'Unknown') AS stage,
-               COUNT(*) AS roles,
+        SELECT deal_stage, COUNT(*) AS roles,
                ROUND(SUM(COALESCE(allocation_pct, 100) / 100.0 * COALESCE(probability_weight, 0.5))::numeric, 1) AS weighted_fte
         FROM pipeline_requests
-        WHERE LOWER(status) = 'not resourced'
-        GROUP BY deal_stage
-        ORDER BY weighted_fte DESC
+        WHERE LOWER(status) = 'not resourced' AND deal_stage IS NOT NULL
+        GROUP BY deal_stage ORDER BY weighted_fte DESC
     """)).fetchall()
-    funnel = [{"stage": r.stage, "roles": int(r.roles), "weighted_fte": float(r.weighted_fte)} for r in funnel_rows]
+    # Merge case duplicates
+    funnel_merged: dict[str, dict] = {}
+    for r in funnel_rows:
+        key = r.deal_stage.lower().strip()
+        if key not in funnel_merged:
+            funnel_merged[key] = {"stage": r.deal_stage, "roles": 0, "weighted_fte": 0.0}
+        funnel_merged[key]["roles"] += int(r.roles)
+        funnel_merged[key]["weighted_fte"] += float(r.weighted_fte)
+    funnel = sorted(funnel_merged.values(), key=lambda x: -x["weighted_fte"])
 
     # 2. Capacity gap by canonical_role (demand vs bench)
     demand_rows = db.execute(text("""

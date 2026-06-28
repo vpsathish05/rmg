@@ -126,6 +126,7 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 ### Extensions Needs: GET /api/rmg/extensions/needs → alloc_end < project_end detection → grouped by project → inline recommend per leaving resource
 ### Nightly 2am IST: APScheduler → rec_cache.compute_all() → full AI pipeline → UPSERT role_recommendations
 ### Email Webhook: Graph POST → background: fetch message → GPT parse → INSERT email_requests
+### Email Manual: POST /api/webhooks/email/process-latest → fetch latest emails → extract PDF → GPT parse → route (NEW→pipeline, EXTEND/CHANGE→email_requests)
 
 ## API Routes
 | Prefix | Router | Purpose |
@@ -138,7 +139,7 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 | `/api/forecast` | forecast.py | Pipeline + outlook + insights (funnel, capacity gap, revenue, hot deals) |
 | `/api/rmg/*` | rmg_engine.py | Pipeline, extensions, extensions/needs, recommend, KB, cache, auto-coe |
 | `/api/resource-map` | resource_map.py | Network graph, project timeline, employee timeline, employee search |
-| `/api/webhooks/email` | webhooks.py | Graph notifications |
+| `/api/webhooks/email` | webhooks.py | Graph notifications + process-latest (manual trigger) |
 
 ## Database: 14 Tables (Azure PostgreSQL)
 employees, projects, project_coes, allocations, timesheets, weekly_status,
@@ -160,14 +161,17 @@ Key patterns:
 | Re-ranking | gpt-4o | Holistic re-ordering of top 10 | Per role |
 | Hire signal | gpt-4o | Actionable hiring profile | no_resource roles only |
 | KB proof | text-embedding-3-small | Past project evidence via cosine search | Top 6 per role |
-| Email parsing | gpt-4o | Structured extraction from emails | Per email |
+| Email/PDF parsing | gpt-4o | Structured extraction from emails + PDF attachments (pdfplumber) | Per email |
 
 ## Email (ACS)
 - Send via Azure Communication Services Email SDK (`azure-communication-email`)
 - Connection string: `ACS_CONNECTION_STRING` env var
 - Sender: `DoNotReply@e3445e90-bf10-44d1-8ea3-32eb935710d6.azurecomm.net`
 - Used for: sending recommendation emails from RMG Engine pipeline
-- Graph API still used for: webhook subscriptions + message fetch (inbound email parsing)
+- Graph API still used for: webhook subscriptions + message fetch + PDF attachment extraction (inbound email parsing)
+- Email request routing: NEW → pipeline_requests, EXTEND/CHANGE → email_requests
+- PDF form: docs/change-request-form/RMG_Request_Form.html (unified form for all 3 types)
+- Graph permissions required: Mail.Read, Mail.Send (Application, admin-consented)
 
 ## Conventions
 - Backend: one router file per domain in `backend/app/routers/`

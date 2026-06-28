@@ -44,7 +44,7 @@ async def _auto_coe(db: Session, canonical_roles: list[str], role_code: str = ""
         return None
 
     row = db.execute(text("""
-        SELECT INITCAP(TRIM(es.coe)) AS coe, COUNT(*) AS cnt
+        SELECT INITCAP(LOWER(TRIM(es.coe))) AS coe, COUNT(*) AS cnt
         FROM employee_skills es
         JOIN employees e
           ON e.employee_id = es.employee_id
@@ -54,7 +54,7 @@ async def _auto_coe(db: Session, canonical_roles: list[str], role_code: str = ""
           AND es.score IS NOT NULL
           AND es.coe IS NOT NULL
           AND TRIM(es.coe) != ''
-        GROUP BY TRIM(es.coe)
+        GROUP BY LOWER(TRIM(es.coe))
         ORDER BY cnt DESC
         LIMIT 1
     """), {"roles": canonical_roles}).fetchone()
@@ -73,7 +73,7 @@ async def _auto_coe(db: Session, canonical_roles: list[str], role_code: str = ""
 
 def _get_available_coes(db: Session) -> list[str]:
     rows = db.execute(text("""
-        SELECT DISTINCT INITCAP(TRIM(coe)) AS coe FROM employee_skills
+        SELECT DISTINCT INITCAP(LOWER(TRIM(coe))) AS coe FROM employee_skills
         WHERE is_assessed = true AND coe IS NOT NULL AND TRIM(coe) != ''
     """)).fetchall()
     return [r.coe for r in rows]
@@ -97,11 +97,11 @@ async def _llm_extract_skills(role_code: str, canonical_roles: list[str], soluti
 def _global_fallback_coe(db: Session) -> str | None:
     """Return the most common COE across all assessed employees."""
     row = db.execute(text("""
-        SELECT INITCAP(TRIM(coe)) AS coe, COUNT(*) AS cnt
+        SELECT INITCAP(LOWER(TRIM(coe))) AS coe, COUNT(*) AS cnt
         FROM employee_skills
         WHERE is_assessed = true AND score IS NOT NULL
           AND coe IS NOT NULL AND TRIM(coe) != ''
-        GROUP BY TRIM(coe)
+        GROUP BY LOWER(TRIM(coe))
         ORDER BY cnt DESC
         LIMIT 1
     """)).fetchone()

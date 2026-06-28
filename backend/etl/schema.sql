@@ -156,7 +156,7 @@ CREATE TABLE IF NOT EXISTS email_requests (
     outlook_message_id  VARCHAR UNIQUE,
     source_email        VARCHAR,
     received_at         TIMESTAMPTZ,
-    request_type        VARCHAR CHECK (request_type IN ('EXTEND','CHANGE')),
+    request_type        VARCHAR CHECK (request_type IN ('EXTEND','CHANGE','NEW')),
     raw_body            TEXT,
     parsed_json         JSONB,
     status              VARCHAR CHECK (status IN ('PENDING','PARSED','ERROR')) DEFAULT 'PENDING',

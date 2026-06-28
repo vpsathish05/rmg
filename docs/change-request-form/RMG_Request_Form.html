@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RMG Resource Request Form</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; color: #19105B; max-width: 720px; margin: 0 auto; padding: 40px 32px; }
+        .header { background: #19105B; color: #fff; padding: 24px 28px; border-radius: 12px; margin-bottom: 28px; }
+        .header h1 { font-size: 20px; font-weight: 700; }
+        .header p { font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 4px; }
+        .section { margin-bottom: 24px; }
+        .section-title { font-size: 13px; font-weight: 700; color: #19105B; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid #19105B20; }
+        .row { display: flex; gap: 16px; margin-bottom: 12px; }
+        .field { flex: 1; }
+        .field label { display: block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #19105B99; margin-bottom: 4px; }
+        .field input, .field select, .field textarea { width: 100%; padding: 8px 12px; border: 1.5px solid #19105B25; border-radius: 8px; font-size: 12px; font-family: Arial; color: #19105B; background: #fff; }
+        .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #19105B; }
+        .field textarea { resize: vertical; min-height: 60px; }
+        .field select { appearance: auto; }
+        .type-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+        .conditional { display: none; padding: 16px; border: 1.5px dashed #FF619640; border-radius: 10px; margin-top: 12px; background: #FF61960a; }
+        .conditional.active { display: block; }
+        .footer { margin-top: 32px; padding-top: 16px; border-top: 1.5px solid #19105B15; font-size: 10px; color: #19105B80; text-align: center; }
+        .instructions { background: #19105B08; border: 1px solid #19105B15; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; font-size: 11px; line-height: 1.6; }
+        .instructions strong { color: #19105B; }
+        @media print { body { padding: 20px; } .no-print { display: none; } }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>RMG Resource Request Form</h1>
+    <p>JMan Group — Fill and email to sathishkumar@jmangroup.com with subject "Resource Request"</p>
+</div>
+
+<div class="instructions">
+    <strong>Instructions:</strong> Select the Request Type below, fill the relevant fields, save as PDF, and email as attachment to <strong>sathishkumar@jmangroup.com</strong> with subject line starting with <strong>"Resource Request"</strong>. The system will automatically parse and route your request.
+</div>
+
+<!-- Request Type -->
+<div class="section">
+    <div class="section-title">Request Type</div>
+    <div class="row">
+        <div class="field">
+            <label>Type *</label>
+            <select id="requestType" onchange="toggleSections()">
+                <option value="">— Select —</option>
+                <option value="NEW">New Resourcing</option>
+                <option value="EXTEND">Extension</option>
+                <option value="CHANGE">Change Request</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Urgency</label>
+            <select id="urgency">
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+                <option value="LOW">Low</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Date</label>
+            <input type="date" id="requestDate" />
+        </div>
+    </div>
+</div>
+
+<!-- Common Fields -->
+<div class="section">
+    <div class="section-title">General Information</div>
+    <div class="row">
+        <div class="field"><label>Client Name *</label><input type="text" id="clientName" placeholder="e.g. Sigma" /></div>
+        <div class="field"><label>Project ID</label><input type="text" id="projectId" placeholder="e.g. CLIENT_9_261" /></div>
+    </div>
+    <div class="row">
+        <div class="field"><label>Requested By *</label><input type="text" id="requestedBy" placeholder="Your name" /></div>
+        <div class="field"><label>Email</label><input type="email" id="requesterEmail" placeholder="your@jmangroup.com" /></div>
+    </div>
+</div>
+
+<!-- NEW RESOURCING section -->
+<div class="conditional" id="sectionNew">
+    <div class="section-title">New Resourcing Details</div>
+    <div class="row">
+        <div class="field"><label>Role *</label><input type="text" id="newRole" placeholder="e.g. Senior Software Engineer" /></div>
+        <div class="field"><label>COE / Technology</label><input type="text" id="newCoe" placeholder="e.g. Data Engineering" /></div>
+    </div>
+    <div class="row">
+        <div class="field"><label>Required Skills</label><input type="text" id="newSkills" placeholder="e.g. Python, Databricks, CDC" /></div>
+    </div>
+    <div class="row">
+        <div class="field"><label>Allocation %</label><input type="number" id="newAlloc" placeholder="100" min="0" max="100" /></div>
+        <div class="field"><label>Duration (weeks)</label><input type="number" id="newDuration" placeholder="12" /></div>
+        <div class="field"><label>Start Date</label><input type="date" id="newStartDate" /></div>
+    </div>
+    <div class="row">
+        <div class="field"><label>Solution / Proposition</label><input type="text" id="newSolution" placeholder="e.g. Value Creation" /></div>
+        <div class="field"><label>Probability %</label><input type="number" id="newProb" placeholder="70" min="0" max="100" /></div>
+    </div>
+    <div class="row">
+        <div class="field"><label>Additional Comments</label><textarea id="newComments" placeholder="Any specific requirements..."></textarea></div>
+    </div>
+</div>
+
+<!-- EXTENSION section -->
+<div class="conditional" id="sectionExtend">
+    <div class="section-title">Extension Details</div>
+    <div class="row">
+        <div class="field"><label>Employee Name *</label><input type="text" id="extEmployee" placeholder="Full name" /></div>
+        <div class="field"><label>Employee ID</label><input type="text" id="extEmpId" placeholder="e.g. EMP123" /></div>
+    </div>
+    <div class="row">
+        <div class="field"><label>Current End Date *</label><input type="date" id="extCurrentEnd" /></div>
+        <div class="field"><label>New End Date *</label><input type="date" id="extNewEnd" /></div>
+    </div>
+    <div class="row">
+        <div class="field"><label>Reason for Extension</label><textarea id="extReason" placeholder="Why is the extension needed?"></textarea></div>
+    </div>
+</div>
+
+<!-- CHANGE section -->
+<div class="conditional" id="sectionChange">
+    <div class="section-title">Change Request Details</div>
+    <div class="row">
+        <div class="field"><label>Employee Name *</label><input type="text" id="chgEmployee" placeholder="Current resource name" /></div>
+        <div class="field"><label>Employee ID</label><input type="text" id="chgEmpId" placeholder="e.g. EMP456" /></div>
+    </div>
+    <div class="row">
+        <div class="field"><label>Change Type *</label>
+            <select id="chgType">
+                <option value="">— Select —</option>
+                <option value="Replace">Replace with another resource</option>
+                <option value="Swap">Swap between projects</option>
+                <option value="Reduce">Reduce allocation</option>
+                <option value="Remove">Remove from project</option>
+            </select>
+        </div>
+        <div class="field"><label>Effective Date</label><input type="date" id="chgDate" /></div>
+    </div>
+    <div class="row">
+        <div class="field"><label>Change Details *</label><textarea id="chgDetails" placeholder="Describe the change needed..."></textarea></div>
+    </div>
+</div>
+
+<div class="footer">
+    RMG Engine — JMan Group · This form is automatically parsed by AI when emailed as PDF attachment.
+</div>
+
+<script>
+function toggleSections() {
+    const type = document.getElementById('requestType').value;
+    document.getElementById('sectionNew').className = 'conditional' + (type === 'NEW' ? ' active' : '');
+    document.getElementById('sectionExtend').className = 'conditional' + (type === 'EXTEND' ? ' active' : '');
+    document.getElementById('sectionChange').className = 'conditional' + (type === 'CHANGE' ? ' active' : '');
+}
+</script>
+
+</body>
+</html>

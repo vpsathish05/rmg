@@ -70,7 +70,7 @@ export default function ResourceMapPage() {
     <div className="flex flex-col h-full">
       <div className="px-8 py-5 bg-white border-b border-gray-100 shrink-0 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: "#19105B" }}>Resource Map</h1>
+          <h1 className="text-xl font-bold" style={{ color: "#19105B" }}>Lifecycle</h1>
           <p className="text-xs text-gray-400 mt-0.5">
             {tab === "project" ? `${network?.nodes.length ?? 0} projects · ${network?.links.length ?? 0} connections` : "Employee project journey — past, present & future"}
           </p>

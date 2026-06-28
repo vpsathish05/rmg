@@ -94,3 +94,20 @@ async def send_email(
             detail = r.text
             raise Exception(f"{r.status_code} {r.reason_phrase}: {detail}")
         return {"status": "sent", "to": to_email}
+
+
+
+async def get_attachments(
+    tenant: str, client_id: str, client_secret: str,
+    mailbox: str, message_id: str,
+) -> list[dict]:
+    """Fetch all attachments for a message."""
+    token = await _get_token(tenant, client_id, client_secret)
+    async with httpx.AsyncClient() as c:
+        r = await c.get(
+            f"{_GRAPH}/users/{mailbox}/messages/{message_id}/attachments",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if r.status_code >= 400:
+            return []
+        return r.json().get("value", [])

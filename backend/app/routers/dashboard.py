@@ -99,11 +99,20 @@ def charts(db: Session = Depends(get_db)):
 
     # 1. Pipeline by deal stage
     stage_rows = db.execute(text("""
-        SELECT COALESCE(deal_stage, 'Unknown') AS stage, COUNT(*) AS cnt
+        SELECT deal_stage AS stage, COUNT(*) AS cnt
         FROM pipeline_requests
+        WHERE deal_stage IS NOT NULL
         GROUP BY deal_stage ORDER BY cnt DESC
     """)).fetchall()
-    pipeline_by_stage = [{"stage": r.stage, "count": int(r.cnt)} for r in stage_rows]
+    # Merge case duplicates
+    merged: dict[str, int] = {}
+    display: dict[str, str] = {}
+    for r in stage_rows:
+        key = r.stage.lower().strip()
+        merged[key] = merged.get(key, 0) + int(r.cnt)
+        if key not in display or int(r.cnt) > merged[key] - int(r.cnt):
+            display[key] = r.stage
+    pipeline_by_stage = [{"stage": display[k], "count": v} for k, v in sorted(merged.items(), key=lambda x: -x[1])]
 
     # 2. Top open roles (Not Resourced)
     role_rows = db.execute(text("""
@@ -140,13 +149,21 @@ def charts(db: Session = Depends(get_db)):
 
     # 4. COE distribution (top 8)
     coe_rows = db.execute(text("""
-        SELECT INITCAP(TRIM(coe)) AS coe, COUNT(DISTINCT employee_id) AS cnt
+        SELECT coe, COUNT(DISTINCT employee_id) AS cnt
         FROM employee_skills
         WHERE is_assessed = true AND score IS NOT NULL AND score > 0
           AND coe IS NOT NULL AND TRIM(coe) != ''
-        GROUP BY TRIM(coe) ORDER BY cnt DESC LIMIT 8
+        GROUP BY coe ORDER BY cnt DESC
     """)).fetchall()
-    coe_distribution = [{"coe": r.coe, "count": int(r.cnt)} for r in coe_rows]
+    # Merge case duplicates
+    coe_merged: dict[str, int] = {}
+    coe_display: dict[str, str] = {}
+    for r in coe_rows:
+        key = r.coe.lower().strip()
+        coe_merged[key] = coe_merged.get(key, 0) + int(r.cnt)
+        if key not in coe_display or int(r.cnt) > coe_merged[key] - int(r.cnt):
+            coe_display[key] = r.coe.strip()
+    coe_distribution = [{"coe": coe_display[k], "count": v} for k, v in sorted(coe_merged.items(), key=lambda x: -x[1])][:8]
 
     return {
         "pipeline_by_stage": pipeline_by_stage,

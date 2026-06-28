@@ -7,7 +7,7 @@ import { logout } from "@/lib/actions";
 const NAV = [
   { href: "/rmg-engine",    label: "Engine",       icon: Cpu },
   { href: "/forecast",      label: "Forecast",     icon: TrendingUp },
-  { href: "/resource-map",  label: "Resource Map", icon: Network },
+  { href: "/resource-map",  label: "Lifecycle",    icon: Network },
   { href: "/",              label: "Dashboard",    icon: LayoutDashboard },
 ];
 

@@ -992,13 +992,63 @@ function ExtensionsView() {
 // ── Changes View ───────────────────────────────────────────────────────────
 function ChangesView() {
   const { data: requests = [], isLoading } = useRmgEmailRequests();
+  const queryClient = useQueryClient();
   const changes = requests.filter(r => r.request_type === "CHANGE" || r.request_type === "NEW");
+  const [processing, setProcessing] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+
+  const processEmails = async () => {
+    setProcessing(true);
+    setLogs(["Connecting to mailbox..."]);
+    try {
+      setLogs(prev => [...prev, "Fetching latest 'Resource Request' emails..."]);
+      const res = await api.post("/api/webhooks/email/process-latest");
+      const data = res.data;
+      if (data.status === "error") {
+        setLogs(prev => [...prev, `Error: ${data.message}`]);
+      } else if (data.processed === 0) {
+        setLogs(prev => [...prev, "No new emails to process."]);
+      } else {
+        for (const e of data.emails) {
+          setLogs(prev => [...prev, `Extracting PDF from: ${e.from}...`, `Parsing with AI: "${e.subject}"...`, `Routed successfully.`]);
+        }
+        setLogs(prev => [...prev, `Done — ${data.processed} email(s) processed.`]);
+        queryClient.invalidateQueries({ queryKey: ["rmg-email-requests"] });
+        queryClient.invalidateQueries({ queryKey: ["rmg-pipeline"] });
+      }
+    } catch (err: any) {
+      setLogs(prev => [...prev, `Failed: ${err?.message || "Unknown error"}`]);
+    }
+    setProcessing(false);
+  };
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
-      <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-        <Mail className="w-4 h-4 text-violet-500" /> Change Requests ({changes.length})
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: "#19105B" }}>
+          <Mail className="w-4 h-4" /> Change Requests ({changes.length})
+        </h2>
+        <button onClick={processEmails} disabled={processing}
+          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50 transition-all"
+          style={{ background: "#19105B" }}>
+          {processing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+          Process Emails
+        </button>
+      </div>
+
+      {/* Processing Logs */}
+      {logs.length > 0 && (
+        <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-1 max-h-40 overflow-y-auto">
+          {logs.map((log, i) => (
+            <p key={i} className="text-[11px] font-mono flex items-center gap-2" style={{ color: "#19105B" }}>
+              <span className="text-[10px] text-gray-400">{String(i + 1).padStart(2, "0")}</span>
+              {log}
+            </p>
+          ))}
+          {processing && <Loader2 className="w-3 h-3 animate-spin text-gray-400 mt-1" />}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="text-xs text-gray-400 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</div>
       ) : changes.length === 0 ? (
