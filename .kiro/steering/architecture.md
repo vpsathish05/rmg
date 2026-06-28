@@ -5,6 +5,9 @@ AI-powered Resource Management System for JMan Group. Replaces manual email-base
 
 ### Use Cases
 - UC1: RMG Engine — 3-tab view (Pipeline → Extensions → Changes) with AI-powered recommendation per role
+  - Pipeline: new demand from pipeline_requests, AI scores candidates per open role
+  - Extensions: auto-detected resource gaps (alloc_end < project_end) + AI replacement recommendations
+  - Changes: email-parsed change/new requests
 - UC2: Demand Forecasting — pipeline requests with 6-month outlook, weighted FTE
 - UC3: Availability Dashboard — employee allocation status with billability tracking
 - UC4: Project Health — RAG from WSR data, overrunning & ramp-down detection
@@ -117,6 +120,7 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 
 ### RMG Engine (instant): GET /api/rmg/pipeline + GET /api/rmg/recommendations (pre-computed JSONB)
 ### Inline Recommend: POST /api/rmg/recommend-role → semantic scoring → scorer → LLM rationale → KB proofs
+### Extensions Needs: GET /api/rmg/extensions/needs → alloc_end < project_end detection → grouped by project → inline recommend per leaving resource
 ### Nightly 2am IST: APScheduler → rec_cache.compute_all() → full AI pipeline → UPSERT role_recommendations
 ### Email Webhook: Graph POST → background: fetch message → GPT parse → INSERT email_requests
 
@@ -129,7 +133,7 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 | `/api/allocations` | allocations.py | Allocation CRUD |
 | `/api/recommend` | recommend.py | Manual recommendation |
 | `/api/forecast` | forecast.py | Pipeline + outlook |
-| `/api/rmg/*` | rmg_engine.py | Pipeline, extensions, recommend, KB, cache, auto-coe |
+| `/api/rmg/*` | rmg_engine.py | Pipeline, extensions, extensions/needs, recommend, KB, cache, auto-coe |
 | `/api/webhooks/email` | webhooks.py | Graph notifications |
 
 ## Database: 14 Tables (Azure PostgreSQL)
