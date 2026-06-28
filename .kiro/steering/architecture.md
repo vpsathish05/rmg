@@ -40,7 +40,7 @@ Categories: Available (has capacity) → BestMatch (score ≥ 0.40, allocated) �
 | Database | Azure PostgreSQL Flexible Server + pgvector | psycopg2-binary |
 | ORM | SQLAlchemy 2.x | ≥2.0.0 |
 | AI | OpenAI (gpt-4o + text-embedding-3-small 1536d) | ≥1.30.0 |
-| Email | Microsoft Graph API (httpx) | ≥0.27.0 |
+| Email | Azure Communication Services (azure-communication-email) | ≥1.0.0 |
 | Scheduling | APScheduler (AsyncIO) | ≥3.10.4 |
 | Auth | Custom JWT sessions (jose) — username/password | N/A |
 
@@ -154,6 +154,13 @@ Key patterns:
 | KB proof | text-embedding-3-small | Past project evidence via cosine search | Top 6 per role |
 | Email parsing | gpt-4o | Structured extraction from emails | Per email |
 
+## Email (ACS)
+- Send via Azure Communication Services Email SDK (`azure-communication-email`)
+- Connection string: `ACS_CONNECTION_STRING` env var
+- Sender: `DoNotReply@e3445e90-bf10-44d1-8ea3-32eb935710d6.azurecomm.net`
+- Used for: sending recommendation emails from RMG Engine pipeline
+- Graph API still used for: webhook subscriptions + message fetch (inbound email parsing)
+
 ## Conventions
 - Backend: one router file per domain in `backend/app/routers/`
 - Frontend: ALL API calls centralized in `lib/hooks.ts` — never call Axios from components
@@ -193,6 +200,10 @@ cd frontend && npm run dev  # → localhost:3000
 ```env
 # Azure PostgreSQL (static auth)
 DATABASE_URL=postgresql://adminuser:<password>@rg-tenaliaiaz-prod-uksouth-02.postgres.database.azure.com:5432/postgres?sslmode=require
+
+# Azure Communication Services (email send)
+ACS_CONNECTION_STRING=endpoint=https://acs-tenaliaiaz-prod-uksouth-01.uk.communication.azure.com/;accesskey=<key>
+ACS_SENDER_EMAIL=DoNotReply@e3445e90-bf10-44d1-8ea3-32eb935710d6.azurecomm.net
 ```
 
 ## ETL Commands

@@ -68,3 +68,29 @@ async def get_message(
         )
         r.raise_for_status()
         return r.json()
+
+
+
+async def send_email(
+    tenant: str, client_id: str, client_secret: str,
+    mailbox: str, to_email: str, subject: str, body_html: str,
+) -> dict:
+    """Send an email via Microsoft Graph on behalf of the mailbox."""
+    token = await _get_token(tenant, client_id, client_secret)
+    async with httpx.AsyncClient() as c:
+        r = await c.post(
+            f"{_GRAPH}/users/{mailbox}/sendMail",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={
+                "message": {
+                    "subject": subject,
+                    "body": {"contentType": "HTML", "content": body_html},
+                    "toRecipients": [{"emailAddress": {"address": to_email}}],
+                },
+                "saveToSentItems": True,
+            },
+        )
+        if r.status_code >= 400:
+            detail = r.text
+            raise Exception(f"{r.status_code} {r.reason_phrase}: {detail}")
+        return {"status": "sent", "to": to_email}

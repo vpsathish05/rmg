@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import {
   Search, Sparkles, Loader2, AlertTriangle, Database, CheckCircle2,
   Mail, TrendingUp, Calendar, Zap, Users, RefreshCw, Clock,
-  ChevronDown, ChevronRight, X, UserCheck, Briefcase,
+  ChevronDown, ChevronRight, X, UserCheck, Briefcase, FileText, Send,
 } from "lucide-react";
 
 
@@ -61,6 +61,229 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
   );
 }
 
+
+// ── Pipeline Logic Modal ───────────────────────────────────────────────────
+function PipelineLogicModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-8 py-5 flex items-center justify-between rounded-t-3xl">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">AI Recommendation Pipeline</h2>
+            <p className="text-xs text-gray-400 mt-0.5">How candidates are scored and ranked</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-all">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-8 py-6 space-y-6">
+          {/* Data Source */}
+          <section>
+            <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">1</span>
+              Data Source
+            </h3>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Pipeline roles come from the <span className="font-mono bg-gray-100 px-1 rounded">pipeline_requests</span> table.
+              Each role has a client, role code, canonical roles, allocation %, duration, and required skills.
+              Only roles with status <span className="font-semibold text-red-600">"Not Resourced"</span> are scored.
+            </p>
+          </section>
+
+          {/* AI Pipeline Steps */}
+          <section>
+            <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">2</span>
+              AI Scoring Pipeline
+            </h3>
+            <div className="space-y-3">
+              {[
+                { step: "COE Detection", desc: "Identifies the technology domain (e.g., Data Engineering, Consulting) via SQL frequency analysis. Falls back to GPT-4o inference if SQL returns nothing.", color: "#7c3aed" },
+                { step: "Skills Extraction", desc: "For roles with missing required_skills, GPT-4o infers 3-5 likely technical skills from the role name and context.", color: "#a855f7" },
+                { step: "Semantic Skill Matching", desc: "Embeds the role query (role + COE + skills) and compares via cosine similarity against pre-computed employee skill profile embeddings (1536 dimensions).", color: "#6d28d9" },
+                { step: "Formula Scoring", desc: "Weighted sum: Skill×0.40 + Competency×0.25 + Availability×0.25 + Productivity×0.10. Skill score blends 50% COE match + 50% semantic similarity.", color: "#7c3aed" },
+                { step: "Rationale Generation", desc: "GPT-4o writes a 2-3 sentence explanation for each top 10 candidate covering skill fit, availability, and concerns.", color: "#a855f7" },
+                { step: "LLM Re-Ranking", desc: "GPT-4o re-orders top 10 candidates considering holistic fit — skill alignment, availability, location, seniority match, and team composition.", color: "#6d28d9" },
+                { step: "KB Proof Search", desc: "pgvector cosine search finds past projects each candidate worked on as evidence of relevant experience.", color: "#7c3aed" },
+                { step: "Hire Signal", desc: "When no match exists, GPT-4o generates an actionable hiring profile with seniority, skills, experience years, and engagement type.", color: "#a855f7" },
+              ].map((item, i) => (
+                <div key={i} className="flex gap-3 items-start">
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[9px] font-bold text-white" style={{ background: item.color }}>{i + 1}</div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-900">{item.step}</p>
+                    <p className="text-[11px] text-gray-500 leading-relaxed mt-0.5">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Scoring Formula */}
+          <section>
+            <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">3</span>
+              Scoring Formula
+            </h3>
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 font-mono text-[11px] text-gray-700 space-y-1">
+              <p><span className="text-violet-600 font-semibold">With competency:</span> total = skill×0.40 + comp×0.25 + avail×0.25 + prod×0.10</p>
+              <p><span className="text-violet-600 font-semibold">Without:</span> total = skill×0.65 + avail×0.25 + prod×0.10</p>
+              <p className="pt-2 border-t border-gray-200 mt-2"><span className="text-violet-600 font-semibold">Skill blend:</span> 50% COE assessment + 50% semantic embedding similarity</p>
+            </div>
+          </section>
+
+          {/* Categories */}
+          <section>
+            <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">4</span>
+              Candidate Categories
+            </h3>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <div><p className="text-xs font-semibold text-emerald-800">Available</p><p className="text-[10px] text-emerald-600">Has capacity ≥ requested allocation %</p></div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100">
+                <Sparkles className="w-4 h-4 text-violet-600 shrink-0" />
+                <div><p className="text-xs font-semibold text-violet-800">Best Match</p><p className="text-[10px] text-violet-600">Allocated but strong fit (score ≥ 40%) — discuss reallocation</p></div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                <AlertTriangle className="w-4 h-4 text-gray-400 shrink-0" />
+                <div><p className="text-xs font-semibold text-gray-700">Stretch</p><p className="text-[10px] text-gray-500">Allocated AND weak fit — not shown in recommendations</p></div>
+              </div>
+            </div>
+          </section>
+
+          {/* Data Sources */}
+          <section>
+            <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">5</span>
+              Data Used
+            </h3>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              {[
+                "employee_skills (COE assessments, 82K records)",
+                "employee_skill_embeddings (286 profiles)",
+                "allocations (active, end_date ≥ today)",
+                "timesheets (last 8 weeks productivity)",
+                "employee_competencies (196 employees)",
+                "project_embeddings (500 projects KB)",
+              ].map(item => (
+                <div key={item} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-100">
+                  <Database className="w-3 h-3 text-gray-400 shrink-0" />
+                  <span className="text-gray-600">{item}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Refresh */}
+          <section className="bg-violet-50 rounded-xl p-4 border border-violet-100">
+            <p className="text-xs text-violet-800">
+              <span className="font-semibold">Nightly refresh:</span> All recommendations are pre-computed at 2:00 AM IST via APScheduler.
+              Click <span className="font-semibold">"Refresh"</span> for on-demand recompute (~7s per role, ~28 min total).
+            </p>
+          </section>
+
+          {/* Real Example */}
+          <section>
+            <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">6</span>
+              Real Example: Sigma — Sr Sol Con
+            </h3>
+            <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 space-y-4 text-[11px]">
+              {/* Request */}
+              <div>
+                <p className="text-xs font-semibold text-gray-900 mb-1.5">The Request</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-600">
+                  <span><span className="text-gray-400">Client:</span> Sigma</span>
+                  <span><span className="text-gray-400">Solution:</span> Value Creation</span>
+                  <span><span className="text-gray-400">Role:</span> Sr Sol Con (Senior Solution Consultant)</span>
+                  <span><span className="text-gray-400">Probability:</span> 70%</span>
+                  <span className="col-span-2"><span className="text-gray-400">Skills:</span> PII handling, Scalable execution environments, Incremental loads &amp; CDC</span>
+                </div>
+              </div>
+
+              {/* Steps */}
+              <div className="border-t border-gray-200 pt-3">
+                <p className="text-xs font-semibold text-gray-900 mb-2">How AI scored top candidate (EMP11)</p>
+                <div className="space-y-2 font-mono">
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold shrink-0">①</span>
+                    <span><span className="text-gray-400">COE:</span> No &quot;Senior Solution Consultant&quot; in skills DB → fallback → <span className="font-semibold text-violet-700">Data Engineering</span></span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold shrink-0">②</span>
+                    <span><span className="text-gray-400">Skills:</span> Present in pipeline data → &quot;PII handling, CDC, Scalable execution&quot;</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold shrink-0">③</span>
+                    <span><span className="text-gray-400">Semantic:</span> Embedded role query → compared 286 profiles → EMP11 similarity = <span className="font-semibold text-emerald-600">51%</span></span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold shrink-0">④</span>
+                    <div>
+                      <span className="text-gray-400">Scoring:</span>
+                      <div className="ml-2 mt-1 space-y-0.5">
+                        <p>COE skills: avg([4,4,4,4,4]) / 5 = <span className="text-violet-700">0.80</span></p>
+                        <p>Blended skill: 50% × 0.80 + 50% × 0.51 = <span className="text-violet-700">0.655</span></p>
+                        <p>Availability: 0% allocated → 100% free = <span className="text-emerald-600">1.00</span></p>
+                        <p>Productivity: 166h / 320h expected = <span className="text-gray-700">0.52</span></p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold shrink-0">⑤</span>
+                    <div>
+                      <span className="text-gray-400">Formula:</span>
+                      <p className="ml-2 mt-0.5">0.655×0.65 + 1.00×0.25 + 0.52×0.10 = <span className="text-lg font-bold text-violet-700">73%</span></p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold shrink-0">⑥</span>
+                    <span><span className="text-gray-400">Category:</span> 100% free ≥ 100% needed → <span className="font-semibold text-emerald-600">Available ✓</span></span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold shrink-0">⑦</span>
+                    <span><span className="text-gray-400">Re-rank:</span> GPT-4o moved EMP529 (Solutions Consultant) up — closer role title match</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Result */}
+              <div className="border-t border-gray-200 pt-3">
+                <p className="text-xs font-semibold text-gray-900 mb-2">Final Output (643 employees evaluated)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-2.5">
+                    <p className="text-[10px] font-bold text-emerald-700 mb-1">AVAILABLE</p>
+                    <p className="font-semibold text-gray-900">#1 EMP11 — 66%</p>
+                    <p className="text-gray-500">Sr Software Engineer, 100% free</p>
+                  </div>
+                  <div className="rounded-lg bg-violet-50 border border-violet-100 p-2.5">
+                    <p className="text-[10px] font-bold text-violet-700 mb-1">BEST MATCH</p>
+                    <p className="font-semibold text-gray-900">#1 EMP863 — 48%</p>
+                    <p className="text-gray-500">Sr SE, 0% free (reallocation)</p>
+                    <p className="font-semibold text-gray-900 mt-1">#2 EMP529 — 48%</p>
+                    <p className="text-gray-500">Solutions Consultant, CDC exp</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* AI value add */}
+              <div className="bg-violet-50 rounded-lg p-3 border border-violet-100">
+                <p className="text-[11px] text-violet-800">
+                  <span className="font-bold">AI Value-Add:</span> Without semantic matching, only EMP11 (free) would appear.
+                  With AI, the system surfaces EMP529/538 (Solutions Consultants with actual CDC &amp; PII experience)
+                  as reallocation candidates — something the formula alone can&apos;t detect.
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Candidate Card ─────────────────────────────────────────────────────────
 function CandidateCard({ candidate, rank, category }: {
@@ -338,6 +561,79 @@ function RoleRow({ role, roleKey, project, isRoleOpen, entry, onToggleRole, onRe
 }
 
 
+// ── Send Recommendation Button ─────────────────────────────────────────────
+function SendRecommendationBtn({ project, recCache }: { project: PipelineProject; recCache: Record<string, CacheEntry> }) {
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [email, setEmail] = useState("");
+  const [showInput, setShowInput] = useState(false);
+
+  const [error, setError] = useState("");
+
+  const handleSend = async () => {
+    if (!email) return;
+    setSending(true);
+    setError("");
+    const roles = project.roles
+      .filter(r => r.status === "Not Resourced")
+      .map(r => {
+        const entry = recCache[`${project.client_name}::${r.id}`];
+        const candidates = [...(entry?.data?.available ?? []), ...(entry?.data?.best_match ?? [])].map(c => ({
+          employee_id: c.employee_id, job_name: c.job_name, score: Math.round(c.total_score * 100), category: c.category,
+        }));
+        return { role_code: r.role_code_raw ?? "Unknown", candidates };
+      })
+      .filter(r => r.candidates.length > 0);
+
+    if (roles.length === 0) {
+      setError("No candidates loaded yet — expand roles first.");
+      setSending(false);
+      return;
+    }
+
+    try {
+      const res = await api.post("/api/rmg/send-recommendation", { client_name: project.client_name, to_email: email, roles });
+      if (res.data?.status === "error") { setError(res.data.message || "Send failed"); }
+      else { setSent(true); setTimeout(() => { setSent(false); setShowInput(false); }, 3000); }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Send failed");
+    }
+    setSending(false);
+  };
+
+  if (sent) return (
+    <div className="px-4 py-3 flex items-center gap-2 border-t border-gray-100 text-xs text-emerald-600 font-medium">
+      <CheckCircle2 className="w-3.5 h-3.5" /> Sent successfully
+    </div>
+  );
+
+  return (
+    <div className="px-4 py-3 flex flex-col gap-2 border-t border-gray-100">
+      {error && (
+        <p className="text-xs text-red-600 flex items-center gap-1.5"><AlertTriangle className="w-3 h-3" />{error}</p>
+      )}
+      {!showInput ? (
+        <button onClick={() => setShowInput(true)}
+          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-violet-600 hover:bg-violet-50 transition-all border border-violet-200 w-fit">
+          <Send className="w-3 h-3" /> Send Recommendation
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 flex-1">
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Recipient email"
+            className="flex-1 max-w-xs text-xs px-3 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300" />
+          <button onClick={handleSend} disabled={sending || !email}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50 transition-all"
+            style={{ background: "#7c3aed" }}>
+            {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+            Send
+          </button>
+          <button onClick={() => setShowInput(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Pipeline Accordion ─────────────────────────────────────────────────────
 function PipelineAccordion({ projects, recCache, expandedClients, expandedRoleKey,
   onToggleClient, onToggleRole, onReloadRole, onExpandAll, onCollapseAll, search, setSearch, showNROnly, setShowNROnly,
@@ -461,6 +757,8 @@ function PipelineAccordion({ projects, recCache, expandedClients, expandedRoleKe
                       })}
                     </tbody>
                   </table>
+                  {/* Send Recommendation button */}
+                  <SendRecommendationBtn project={project} recCache={recCache} />
                 </div>
               )}
             </div>
@@ -594,6 +892,7 @@ export default function RmgEnginePage() {
   const [tab, setTab] = useState<TabType>("pipeline");
   const [search, setSearch] = useState("");
   const [showNROnly, setShowNROnly] = useState(false);
+  const [showLogicModal, setShowLogicModal] = useState(false);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [expandedRoleKey, setExpandedRoleKey] = useState<string | null>(null);
   const [recCache, setRecCache] = useState<Record<string, CacheEntry>>({});
@@ -674,27 +973,20 @@ export default function RmgEnginePage() {
   }, [serverRecs, rawProjects]);
 
 
-  // Auto-expand first NR client + background pre-load
+  // Auto-expand first NR client (no background pre-load — use server recs)
   useEffect(() => {
-    if (!rawProjects.length) return;
-    if (!initialExpandedRef.current) {
-      initialExpandedRef.current = true;
-      const firstNR = rawProjects.find(p => p.roles.some(r => r.status === "Not Resourced"));
-      if (firstNR) {
-        setExpandedClients(new Set([firstNR.client_name]));
-        const firstRole = firstNR.roles.find(r => r.status === "Not Resourced");
-        if (firstRole) {
-          const key = `${firstNR.client_name}::${firstRole.id}`;
-          setExpandedRoleKey(key);
-          loadRole(key, firstNR, firstRole);
-        }
+    if (!rawProjects.length || initialExpandedRef.current) return;
+    initialExpandedRef.current = true;
+    const firstNR = rawProjects.find(p => p.roles.some(r => r.status === "Not Resourced"));
+    if (firstNR) {
+      setExpandedClients(new Set([firstNR.client_name]));
+      const firstRole = firstNR.roles.find(r => r.status === "Not Resourced");
+      if (firstRole) {
+        const key = `${firstNR.client_name}::${firstRole.id}`;
+        setExpandedRoleKey(key);
       }
     }
-    rawProjects.forEach(p => p.roles.filter(r => r.status === "Not Resourced").forEach(r => {
-      const key = `${p.client_name}::${r.id}`;
-      loadRole(key, p, r);
-    }));
-  }, [rawProjects, loadRole]);
+  }, [rawProjects]);
 
   const handleToggleClient = useCallback((name: string) => {
     setExpandedClients(prev => prev.has(name) ? new Set<string>() : new Set([name]));
@@ -750,6 +1042,10 @@ export default function RmgEnginePage() {
             <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><Database className="w-3 h-3" /> {kbStatus.embeddings} KB</span>
           )}
           <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 rounded-xl"
+            onClick={() => setShowLogicModal(true)}>
+            <FileText className="w-3 h-3" /> Logic
+          </Button>
+          <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 rounded-xl"
             onClick={() => refreshRecs.mutate()} disabled={refreshRecs.isPending || cacheStatus?.is_running}>
             {refreshRecs.isPending || cacheStatus?.is_running ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
             Refresh
@@ -779,6 +1075,7 @@ export default function RmgEnginePage() {
       {tab === "extensions" && <ExtensionsView />}
       {tab === "changes" && <ChangesView />}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <PipelineLogicModal open={showLogicModal} onClose={() => setShowLogicModal(false)} />
     </>
   );
 }

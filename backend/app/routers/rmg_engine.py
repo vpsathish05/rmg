@@ -461,3 +461,93 @@ async def refresh_recommendations(background_tasks: BackgroundTasks):
         return {"message": "A compute is already in progress — please wait."}
     background_tasks.add_task(_run_compute_bg)
     return {"message": "Recommendation refresh started. Check /api/rmg/recommendations/status for progress."}
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Send Recommendation Email
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SendRecommendationRequest(BaseModel):
+    client_name: str
+    to_email: str
+    roles: list[dict]  # [{role_code, candidates: [{employee_id, job_name, score, category}]}]
+
+
+@router.post("/send-recommendation")
+async def send_recommendation(req: SendRecommendationRequest):
+    """Send resource recommendation email via Azure Communication Services."""
+    from app.config import settings
+    from fastapi.responses import JSONResponse
+
+    if not settings.acs_connection_string:
+        return JSONResponse(status_code=502, content={"status": "error", "message": "Email not configured (ACS connection string missing)"})
+
+    # Build HTML email
+    roles_html = ""
+    for role in req.roles:
+        candidates_html = ""
+        for c in role.get("candidates", []):
+            cat_color = "#059669" if c.get("category") == "Available" else "#7c3aed"
+            candidates_html += f"""
+            <tr>
+                <td style="padding:8px 12px;border-bottom:1px solid #f1f1f1;font-size:13px">{c.get('employee_id','')}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #f1f1f1;font-size:13px">{c.get('job_name','')}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #f1f1f1;font-size:13px;color:{cat_color};font-weight:600">{c.get('category','')}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #f1f1f1;font-size:13px;font-weight:700">{c.get('score',0)}%</td>
+            </tr>"""
+
+        roles_html += f"""
+        <div style="margin-bottom:20px">
+            <h3 style="margin:0 0 8px;font-size:14px;color:#19105B">{role.get('role_code','Unknown Role')}</h3>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+                <thead>
+                    <tr style="background:#f9fafb">
+                        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">ID</th>
+                        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">Role</th>
+                        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">Category</th>
+                        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">Score</th>
+                    </tr>
+                </thead>
+                <tbody>{candidates_html}</tbody>
+            </table>
+        </div>"""
+
+    body_html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+        <div style="background:#19105B;padding:20px 24px;border-radius:12px 12px 0 0">
+            <h1 style="margin:0;color:#fff;font-size:18px">Resource Recommendation</h1>
+            <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px">RMG Engine · JMan Group</p>
+        </div>
+        <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+            <p style="font-size:14px;color:#374151;margin:0 0 16px">
+                Hi,<br><br>
+                Here are the AI-recommended resources for <strong>{req.client_name}</strong>:
+            </p>
+            {roles_html}
+            <p style="font-size:12px;color:#9ca3af;margin:16px 0 0;border-top:1px solid #f1f1f1;padding-top:12px">
+                Scored by RMG AI Engine — skill match, availability, competency &amp; productivity.
+                Please reach out to discuss allocation.
+            </p>
+        </div>
+    </div>"""
+
+    try:
+        from azure.communication.email import EmailClient
+        client = EmailClient.from_connection_string(settings.acs_connection_string)
+        message = {
+            "senderAddress": settings.acs_sender_email,
+            "recipients": {"to": [{"address": req.to_email}]},
+            "content": {
+                "subject": f"Resource Recommendation — {req.client_name}",
+                "html": body_html,
+            },
+        }
+        poller = client.begin_send(message)
+        poller.result()
+        return {"status": "sent", "message": f"Recommendation sent to {req.to_email}"}
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"ACS send_email failed: {e}")
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=502, content={"status": "error", "message": str(e)})
