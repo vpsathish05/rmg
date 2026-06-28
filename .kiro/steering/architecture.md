@@ -8,9 +8,10 @@ AI-powered Resource Management System for JMan Group. Replaces manual email-base
   - Pipeline: new demand from pipeline_requests, AI scores candidates per open role
   - Extensions: auto-detected resource gaps (alloc_end < project_end) + AI replacement recommendations
   - Changes: email-parsed change/new requests
-- UC2: Demand Forecasting — pipeline requests with 6-month outlook, weighted FTE
-- UC3: Availability Dashboard — employee allocation status with billability tracking
+- UC2: Demand Forecasting — pipeline requests with 6-month outlook, weighted FTE, capacity gap, revenue at risk, hot deals
+- UC3: Availability Dashboard — employee allocation status with billability tracking, charts (utilization donut, RAG, demand vs supply, COE distribution)
 - UC4: Project Health — RAG from WSR data, overrunning & ramp-down detection
+- UC5: Resource Map — network graph (projects connected by shared employees) + project/resource timeline (Gantt)
 
 ### Scoring Formula
 ```
@@ -63,9 +64,10 @@ rmg/
 │   │       ├── availability/       ← Employee availability
 │   │       ├── forecast/           ← Pipeline forecasting
 │   │       ├── projects/           ← Project health
+│   │       ├── resource-map/       ← Network graph + project/resource timelines
 │   │       └── recommend/          ← Manual recommendation form
 │   ├── components/
-│   │   ├── layout/sidebar.tsx      ← Navigation (RMG Engine, Forecast, Dashboard)
+│   │   ├── layout/sidebar.tsx      ← Navigation (Engine, Forecast, Resource Map, Dashboard)
 │   │   └── ui/                     ← shadcn primitives
 │   └── lib/
 │       ├── api.ts                  ← Axios instance
@@ -87,6 +89,7 @@ rmg/
 │   │   │   ├── forecast.py       ← Pipeline + outlook
 │   │   │   ├── dashboard.py      ← Summary aggregation
 │   │   │   ├── webhooks.py       ← Graph email notifications
+│   │   │   ├── resource_map.py   ← Network graph + timeline endpoints
 │   │   │   ├── allocations.py    ← Allocation CRUD
 │   │   │   └── health.py         ← Health check
 │   │   ├── schemas/              ← Pydantic request/response
@@ -132,8 +135,9 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 | `/api/projects` | projects.py | Health, overrunning, ramp-down |
 | `/api/allocations` | allocations.py | Allocation CRUD |
 | `/api/recommend` | recommend.py | Manual recommendation |
-| `/api/forecast` | forecast.py | Pipeline + outlook |
+| `/api/forecast` | forecast.py | Pipeline + outlook + insights (funnel, capacity gap, revenue, hot deals) |
 | `/api/rmg/*` | rmg_engine.py | Pipeline, extensions, extensions/needs, recommend, KB, cache, auto-coe |
+| `/api/resource-map` | resource_map.py | Network graph, project timeline, employee timeline, employee search |
 | `/api/webhooks/email` | webhooks.py | Graph notifications |
 
 ## Database: 14 Tables (Azure PostgreSQL)
@@ -168,8 +172,8 @@ Key patterns:
 ## Conventions
 - Backend: one router file per domain in `backend/app/routers/`
 - Frontend: ALL API calls centralized in `lib/hooks.ts` — never call Axios from components
-- UI: modern rounded-2xl design, violet accent palette, inline styles for brand colors
-- Sidebar: 3 top-level routes — RMG Engine, Forecast, Dashboard
+- UI: JMan brand — primary #19105B (Midnight Blue), secondary #FF6196 (Rose), 75% white / 20% primary / 5% secondary, Arial font
+- Sidebar: 4 top-level routes — Engine, Forecast, Resource Map, Dashboard
 - Scoring categories: Available / BestMatch (≥0.40) / Stretch
 - Auth: custom JWT (jose), httpOnly cookie, 8h expiry
 - Layered: Routers (thin) → Services (logic) → Database
