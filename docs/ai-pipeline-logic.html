@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RMG AI Recommendation Pipeline</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f8f9fc; color: #1a1a2e; line-height: 1.6; }
+        
+        .header { background: linear-gradient(135deg, #19105B 0%, #7c3aed 100%); padding: 48px 0; text-align: center; }
+        .header h1 { color: #fff; font-size: 2rem; font-weight: 700; }
+        .header p { color: rgba(255,255,255,0.7); font-size: 0.95rem; margin-top: 8px; }
+        
+        .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+        
+        .section { background: #fff; border-radius: 16px; padding: 32px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e8e8f0; }
+        .section h2 { font-size: 1.3rem; font-weight: 700; color: #19105B; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .section h2 .num { background: #7c3aed; color: #fff; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; }
+        .section h3 { font-size: 1rem; font-weight: 600; color: #374151; margin: 20px 0 10px; }
+        
+        .mermaid { margin: 20px 0; overflow-x: auto; }
+        
+        .flow-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin: 12px 0; }
+        .flow-card h4 { font-size: 0.9rem; font-weight: 700; color: #7c3aed; margin-bottom: 8px; }
+        .flow-card p { font-size: 0.85rem; color: #4b5563; }
+        .flow-card code { background: #ede9fe; color: #5b21b6; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; }
+        
+        .formula-box { background: #19105B; border-radius: 12px; padding: 24px; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 2; }
+        .formula-box .label { color: #c4b5fd; font-weight: 600; }
+        
+        .table-wrap { overflow-x: auto; margin: 16px 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th { background: #f3f0ff; color: #5b21b6; padding: 12px 16px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb; }
+        td { padding: 10px 16px; border-bottom: 1px solid #f1f1f5; color: #374151; }
+        tr:hover td { background: #faf5ff; }
+        
+        .category-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin: 16px 0; }
+        .cat-card { border-radius: 12px; padding: 16px; border: 1px solid; }
+        .cat-card.available { background: #ecfdf5; border-color: #a7f3d0; }
+        .cat-card.available h4 { color: #059669; }
+        .cat-card.bestmatch { background: #f5f3ff; border-color: #c4b5fd; }
+        .cat-card.bestmatch h4 { color: #7c3aed; }
+        .cat-card.stretch { background: #f9fafb; border-color: #e5e7eb; }
+        .cat-card.stretch h4 { color: #6b7280; }
+        .cat-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 4px; }
+        .cat-card p { font-size: 0.8rem; color: #4b5563; }
+        
+        .example-box { background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border: 1px solid #c4b5fd; border-radius: 12px; padding: 24px; margin: 16px 0; }
+        .example-box h4 { color: #5b21b6; font-weight: 700; margin-bottom: 12px; }
+        
+        .step-list { list-style: none; padding: 0; }
+        .step-list li { position: relative; padding: 12px 0 12px 40px; border-left: 2px solid #e5e7eb; margin-left: 14px; }
+        .step-list li:last-child { border-left-color: transparent; }
+        .step-list li::before { content: attr(data-step); position: absolute; left: -14px; top: 10px; width: 28px; height: 28px; background: #7c3aed; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
+        .step-list li strong { color: #19105B; display: block; margin-bottom: 4px; }
+        .step-list li span { font-size: 0.85rem; color: #4b5563; }
+
+        .cost-badge { display: inline-block; background: #ecfdf5; color: #059669; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; margin-left: 8px; }
+        
+        .highlight { background: #ede9fe; padding: 16px; border-radius: 10px; border-left: 4px solid #7c3aed; margin: 16px 0; font-size: 0.85rem; color: #374151; }
+        .highlight strong { color: #5b21b6; }
+
+        @media (max-width: 768px) {
+            .container { padding: 20px 16px; }
+            .section { padding: 20px; }
+            .category-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>RMG AI Recommendation Pipeline</h1>
+    <p>How candidates are scored and ranked for resource allocation</p>
+</div>
+
+<div class="container">
+
+<!-- Overview Flow -->
+<div class="section">
+    <h2><span class="num">0</span> High-Level Flow</h2>
+    <div class="mermaid">
+flowchart LR
+    A[Pipeline Role<br>'Not Resourced'] --> B[COE Detection]
+    B --> C[Skills Extraction]
+    C --> D[Semantic Matching]
+    D --> E[Formula Scoring<br>643 employees]
+    E --> F[Rationale<br>Top 10]
+    F --> G[LLM Re-Rank<br>Top 10]
+    G --> H[KB Proof<br>Top 6]
+    H --> I{Candidates?}
+    I -->|Yes| J[Available + BestMatch]
+    I -->|No| K[Hire Signal]
+
+    style A fill:#fee2e2,stroke:#ef4444
+    style B fill:#ede9fe,stroke:#7c3aed
+    style C fill:#ede9fe,stroke:#7c3aed
+    style D fill:#dbeafe,stroke:#3b82f6
+    style E fill:#ecfdf5,stroke:#059669
+    style F fill:#ede9fe,stroke:#7c3aed
+    style G fill:#ede9fe,stroke:#7c3aed
+    style H fill:#fef3c7,stroke:#f59e0b
+    style J fill:#ecfdf5,stroke:#059669
+    style K fill:#fef3c7,stroke:#f59e0b
+    </div>
+    <div class="highlight">
+        <strong>Key Insight:</strong> Steps 1-4 use DB data + embeddings (fast, cheap). Steps 5-8 use GPT-4o (slower, cost per role ~$0.015). Total nightly cost for ~240 roles: ~$3.60.
+    </div>
+</div>
+
+<!-- Step 1: COE Detection -->
+<div class="section">
+    <h2><span class="num">1</span> COE Detection</h2>
+    <p style="font-size:0.9rem; color:#4b5563; margin-bottom:16px;">Identifies which technology domain (e.g., "Data Engineering", "Consulting") the role belongs to.</p>
+    <div class="mermaid">
+flowchart TD
+    A[Input: canonical_roles<br>e.g. 'Senior Solution Consultant'] --> B{SQL: Most common COE<br>for this role in employee_skills?}
+    B -->|Found| C[Return COE]
+    B -->|Not Found| D{SQL: Global fallback<br>Most common COE overall?}
+    D -->|Found| C
+    D -->|Not Found| E[GPT-4o: Given available COEs,<br>which fits this role?]
+    E --> C
+
+    style A fill:#fee2e2,stroke:#ef4444
+    style C fill:#ecfdf5,stroke:#059669
+    style E fill:#ede9fe,stroke:#7c3aed
+    </div>
+    <div class="flow-card">
+        <h4>Data Source</h4>
+        <p><code>employee_skills</code> table — 82K records with COE assessments per employee. SQL counts which COE most employees with this canonical_role are assessed in.</p>
+    </div>
+</div>
+
+<!-- Step 2: Skills Extraction -->
+<div class="section">
+    <h2><span class="num">2</span> Skills Extraction</h2>
+    <p style="font-size:0.9rem; color:#4b5563; margin-bottom:16px;">Only runs when the pipeline data has no required_skills (null/nan).</p>
+    <div class="mermaid">
+flowchart LR
+    A[Role: 'Sr Sol Con'<br>Skills: null] --> B{required_skills<br>present?}
+    B -->|Yes| C[Use existing skills]
+    B -->|No/nan| D[GPT-4o: Infer 3-5 skills<br>from role name + COE]
+    D --> E[Output: 'PII handling,<br>CDC, Scalable execution']
+
+    style B fill:#fef3c7,stroke:#f59e0b
+    style D fill:#ede9fe,stroke:#7c3aed
+    style E fill:#ecfdf5,stroke:#059669
+    </div>
+    <div class="highlight">
+        <strong>Example prompt:</strong> "For a consulting role 'Sol Con' (canonical: Senior Consultant), solution: Value Creation, list the 3-5 most likely required technical skills."
+    </div>
+</div>
+
+<!-- Step 3: Semantic Matching -->
+<div class="section">
+    <h2><span class="num">3</span> Semantic Skill Matching</h2>
+    <p style="font-size:0.9rem; color:#4b5563; margin-bottom:16px;">Compares the role's requirements against every employee's skill profile using AI embeddings (1536 dimensions).</p>
+    <div class="mermaid">
+flowchart LR
+    A[Role Query:<br>'Sr Sol Con + Data Eng +<br>PII, CDC, Scalable'] --> B[OpenAI Embedding API<br>text-embedding-3-small]
+    B --> C[1536-d Vector]
+    C --> D[Cosine Similarity vs<br>286 employee embeddings<br>in DB]
+    D --> E[Scores:<br>EMP11=0.51<br>EMP529=0.48<br>EMP863=0.47]
+
+    style B fill:#dbeafe,stroke:#3b82f6
+    style D fill:#ecfdf5,stroke:#059669
+    style E fill:#ecfdf5,stroke:#059669
+    </div>
+    <div class="flow-card">
+        <h4>Pre-computed Employee Embeddings</h4>
+        <p>Each employee's full skill profile (all their skills, COEs, scores) is embedded into a 1536-dimension vector during ETL (<code>build_skill_embeddings.py</code>). Stored in <code>employee_skill_embeddings</code> table. This only needs to be rebuilt when skill data changes.</p>
+    </div>
+</div>
+
+<!-- Step 4: Formula Scoring -->
+<div class="section">
+    <h2><span class="num">4</span> Formula Scoring</h2>
+    <p style="font-size:0.9rem; color:#4b5563; margin-bottom:16px;">Scores ALL eligible employees using 4 weighted components. Pure math — no AI calls.</p>
+    
+    <h3>Data Pulled (5 Batch SQL Queries)</h3>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Query</th><th>Table</th><th>What it gets</th></tr></thead>
+            <tbody>
+                <tr><td>1</td><td><code>employees</code></td><td>All active employees matching canonical_role</td></tr>
+                <tr><td>2</td><td><code>allocations</code></td><td>Current allocation % per employee (SUM where active)</td></tr>
+                <tr><td>3</td><td><code>employee_skills</code></td><td>Skill scores for the detected COE (1-5 scale)</td></tr>
+                <tr><td>4</td><td><code>employee_competencies</code></td><td>Competency scores (only for certain roles)</td></tr>
+                <tr><td>5</td><td><code>timesheets</code></td><td>Approved hours in last 8 weeks</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3>Sub-Score Calculation</h3>
+    <div class="mermaid">
+flowchart TD
+    subgraph SKILL["Skill Score (0-1)"]
+        S1[COE skill scores exist?] -->|Yes| S2["avg(scores) / 5"]
+        S1 -->|No, has other COEs| S3["0.15 (neutral)"]
+        S1 -->|No skills at all| S4["0.0"]
+        S2 --> S5["Blend: 50% COE + 50% Semantic"]
+        S3 --> S5
+    end
+    subgraph AVAIL["Availability Score (0-1)"]
+        A1["(100 - allocated%) / 100"]
+    end
+    subgraph PROD["Productivity Score (0-1)"]
+        P1["approved_hours / (8 weeks x 40h)"]
+    end
+    subgraph COMP["Competency Score (0-1)"]
+        C1["avg(comp_scores) / 4<br>(only certain roles)"]
+    end
+
+    style SKILL fill:#f5f3ff,stroke:#7c3aed
+    style AVAIL fill:#ecfdf5,stroke:#059669
+    style PROD fill:#f9fafb,stroke:#6b7280
+    style COMP fill:#fdf4ff,stroke:#a855f7
+    </div>
+
+    <h3>Final Formula</h3>
+    <div class="formula-box">
+        <span class="label">With competency:</span><br>
+        &nbsp;&nbsp;total = skill <strong>x 0.40</strong> + competency <strong>x 0.25</strong> + availability <strong>x 0.25</strong> + productivity <strong>x 0.10</strong><br><br>
+        <span class="label">Without competency:</span><br>
+        &nbsp;&nbsp;total = skill <strong>x 0.65</strong> + availability <strong>x 0.25</strong> + productivity <strong>x 0.10</strong><br><br>
+        <span class="label">Skill blend:</span><br>
+        &nbsp;&nbsp;skill_score = 50% x COE_assessment + 50% x semantic_similarity
+    </div>
+
+    <h3>Category Assignment</h3>
+    <div class="category-grid">
+        <div class="cat-card available">
+            <h4>Available</h4>
+            <p>Employee has free capacity >= requested allocation %. <strong>Ready to deploy.</strong></p>
+        </div>
+        <div class="cat-card bestmatch">
+            <h4>Best Match</h4>
+            <p>Fully allocated BUT total_score >= 0.40. Strong fit — <strong>discuss reallocation.</strong></p>
+        </div>
+        <div class="cat-card stretch">
+            <h4>Stretch</h4>
+            <p>Allocated AND weak fit (score < 0.40). <strong>Not shown in recommendations.</strong></p>
+        </div>
+    </div>
+</div>
+
+<!-- Step 5: Rationale -->
+<div class="section">
+    <h2><span class="num">5</span> Rationale Generation <span class="cost-badge">~$0.01/role</span></h2>
+    <p style="font-size:0.9rem; color:#4b5563; margin-bottom:16px;">GPT-4o writes a 2-3 sentence explanation for each of the top 10 candidates. Runs in parallel.</p>
+    <div class="mermaid">
+flowchart LR
+    A[Top 10 Candidates<br>+ their scores] --> B[10 parallel GPT-4o calls]
+    B --> C[2-3 sentences each:<br>skill fit, availability, concerns]
+
+    style B fill:#ede9fe,stroke:#7c3aed
+    </div>
+    <div class="example-box">
+        <h4>Example Output</h4>
+        <p style="font-size:0.85rem; font-style:italic;">"EMP11 demonstrates strong Data Engineering skills with 65% match and direct COE assessment experience. Fully available at 100% capacity, making immediate deployment feasible. Productivity at 52% suggests current bench availability aligning well with project timelines."</p>
+    </div>
+</div>
+
+<!-- Step 6: Re-Ranking -->
+<div class="section">
+    <h2><span class="num">6</span> LLM Re-Ranking <span class="cost-badge">~$0.002/role</span></h2>
+    <p style="font-size:0.9rem; color:#4b5563; margin-bottom:16px;">GPT-4o re-orders the top 10 based on holistic judgment — catches things the formula misses (title match, team composition).</p>
+    <div class="mermaid">
+flowchart LR
+    A["Formula Order:<br>1. EMP11 (73%)<br>2. EMP863 (48%)<br>3. EMP529 (48%)"] --> B[GPT-4o:<br>'Re-rank considering<br>skill alignment, seniority,<br>location, role title match']
+    B --> C["Re-ranked:<br>1. EMP11 (73%)<br>2. EMP529 (48%) ↑<br>3. EMP863 (48%) ↓"]
+
+    style B fill:#ede9fe,stroke:#7c3aed
+    </div>
+    <div class="highlight">
+        <strong>Why EMP529 moved up:</strong> "Solutions Consultant" is a closer title match to "Senior Solution Consultant" than "Senior Software Engineer" — the formula treats them equally, but the LLM catches the semantic alignment.
+    </div>
+</div>
+
+<!-- Step 7: KB Proof -->
+<div class="section">
+    <h2><span class="num">7</span> KB Proof Search <span class="cost-badge">~$0.0001/role</span></h2>
+    <p style="font-size:0.9rem; color:#4b5563; margin-bottom:16px;">Finds past projects each candidate worked on as evidence of relevant experience. Uses pgvector cosine search.</p>
+    <div class="mermaid">
+flowchart LR
+    A[Role query embedding] --> B[For each top 6 candidate:]
+    B --> C["Search project_embeddings<br>WHERE employee was allocated<br>ORDER BY cosine similarity"]
+    C --> D["Proof:<br>EMP529 → CLIENT_22_055 (78%)<br>EMP11 → CLIENT_15_042 (72%)"]
+
+    style C fill:#fef3c7,stroke:#f59e0b
+    style D fill:#ecfdf5,stroke:#059669
+    </div>
+    <div class="flow-card">
+        <h4>What project_embeddings contains</h4>
+        <p>500 projects, each embedded with: project ID, client, COE, team roles, health trend, skills used, hours logged. Built via <code>build_kb.py</code> ETL.</p>
+    </div>
+</div>
+
+<!-- Step 8: Hire Signal -->
+<div class="section">
+    <h2><span class="num">8</span> Smart Hire Signal <span class="cost-badge">only when no match</span></h2>
+    <p style="font-size:0.9rem; color:#4b5563; margin-bottom:16px;">When no candidate is Available or BestMatch, GPT-4o generates an actionable hiring profile.</p>
+    <div class="mermaid">
+flowchart LR
+    A["0 Available<br>0 BestMatch<br>643 evaluated"] --> B[GPT-4o:<br>'Generate hire profile<br>with seniority, skills,<br>experience, engagement type']
+    B --> C["Hire: Mid-senior Data Engineer<br>5-7 years, CDC/PII experience<br>Contract, 12 weeks"]
+
+    style A fill:#fee2e2,stroke:#ef4444
+    style B fill:#ede9fe,stroke:#7c3aed
+    style C fill:#fef3c7,stroke:#f59e0b
+    </div>
+</div>
+
+<!-- Real Example -->
+<div class="section">
+    <h2><span class="num">*</span> Real Example: Sigma — Sr Sol Con</h2>
+    
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Field</th><th>Value</th></tr></thead>
+            <tbody>
+                <tr><td>Client</td><td>Sigma</td></tr>
+                <tr><td>Role</td><td>Sr Sol Con (Senior Solution Consultant)</td></tr>
+                <tr><td>Solution</td><td>Value Creation</td></tr>
+                <tr><td>Probability</td><td>70%</td></tr>
+                <tr><td>Skills</td><td>PII handling, Scalable execution environments, Incremental loads & CDC</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3>How EMP11 was scored</h3>
+    <ol class="step-list">
+        <li data-step="1">
+            <strong>COE Detection</strong>
+            <span>No "Senior Solution Consultant" in skills DB &rarr; SQL global fallback &rarr; <strong>Data Engineering</strong></span>
+        </li>
+        <li data-step="2">
+            <strong>Skills</strong>
+            <span>Present in pipeline data &rarr; "PII handling, CDC, Scalable execution" (no LLM needed)</span>
+        </li>
+        <li data-step="3">
+            <strong>Semantic Match</strong>
+            <span>Embedded role query &rarr; compared 286 profiles &rarr; EMP11 similarity = <strong>51%</strong></span>
+        </li>
+        <li data-step="4">
+            <strong>Formula Scoring</strong>
+            <span>
+                COE skills: avg([4,4,4,4,4]) / 5 = <strong>0.80</strong><br>
+                Blended skill: 50% x 0.80 + 50% x 0.51 = <strong>0.655</strong><br>
+                Availability: 0% allocated = <strong>1.00</strong><br>
+                Productivity: 166h / 320h = <strong>0.52</strong><br>
+                Total: 0.655 x 0.65 + 1.00 x 0.25 + 0.52 x 0.10 = <strong>73%</strong>
+            </span>
+        </li>
+        <li data-step="5">
+            <strong>Category</strong>
+            <span>100% free >= 100% needed &rarr; <strong>Available</strong></span>
+        </li>
+        <li data-step="6">
+            <strong>Re-rank</strong>
+            <span>GPT-4o moved EMP529 (Solutions Consultant) up — closer role title match</span>
+        </li>
+    </ol>
+
+    <h3 style="margin-top:24px;">Final Output (643 employees evaluated)</h3>
+    <div class="category-grid">
+        <div class="cat-card available">
+            <h4>#1 EMP11 — 66%</h4>
+            <p>Sr Software Engineer, 100% free</p>
+        </div>
+        <div class="cat-card bestmatch">
+            <h4>#1 EMP863 — 48%</h4>
+            <p>Sr SE, 0% free (reallocation candidate)</p>
+        </div>
+        <div class="cat-card bestmatch">
+            <h4>#2 EMP529 — 48%</h4>
+            <p>Solutions Consultant, actual CDC & PII experience</p>
+        </div>
+    </div>
+
+    <div class="highlight">
+        <strong>AI Value-Add:</strong> Without semantic matching, only EMP11 (free) would appear. With AI, the system surfaces EMP529/538 (Solutions Consultants with actual CDC & PII experience) as reallocation candidates — something the formula alone cannot detect.
+    </div>
+</div>
+
+<!-- Cost Summary -->
+<div class="section">
+    <h2><span class="num">$</span> Cost Per Role</h2>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Step</th><th>Source</th><th>Cost</th></tr></thead>
+            <tbody>
+                <tr><td>COE Detection</td><td>SQL (99%) / GPT-4o fallback (1%)</td><td>Free / ~$0.001</td></tr>
+                <tr><td>Skills Extraction</td><td>GPT-4o (only when null)</td><td>~$0.001</td></tr>
+                <tr><td>Semantic Matching</td><td>OpenAI Embeddings API</td><td>~$0.0001</td></tr>
+                <tr><td>Formula Scoring</td><td>Pure SQL + in-memory math</td><td>Free</td></tr>
+                <tr><td>Rationale (x10)</td><td>GPT-4o x 10 parallel calls</td><td>~$0.01</td></tr>
+                <tr><td>Re-Ranking</td><td>GPT-4o x 1 call</td><td>~$0.002</td></tr>
+                <tr><td>KB Proof</td><td>OpenAI Embeddings + pgvector</td><td>~$0.0001</td></tr>
+                <tr><td>Hire Signal</td><td>GPT-4o (only when no match)</td><td>~$0.002</td></tr>
+                <tr><td colspan="2"><strong>Total per role</strong></td><td><strong>~$0.015</strong></td></tr>
+                <tr><td colspan="2"><strong>Nightly (240 roles)</strong></td><td><strong>~$3.60</strong></td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Timing -->
+<div class="section">
+    <h2><span class="num">T</span> When Does It Run?</h2>
+    <div class="mermaid">
+flowchart LR
+    A["Nightly 2:00 AM IST<br>(APScheduler)"] --> B["Full pipeline for ALL<br>'Not Resourced' roles<br>~240 roles, ~28 min"]
+    C["User clicks 'Refresh'"] --> B
+    D["User expands a role<br>in Pipeline/Extensions"] --> E["Inline: auto-coe +<br>recommend-role<br>~3-7 sec per role"]
+
+    style A fill:#dbeafe,stroke:#3b82f6
+    style B fill:#ecfdf5,stroke:#059669
+    style D fill:#fef3c7,stroke:#f59e0b
+    style E fill:#ecfdf5,stroke:#059669
+    </div>
+</div>
+
+</div>
+
+<script>
+    mermaid.initialize({ 
+        startOnLoad: true, 
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#f5f3ff',
+            primaryBorderColor: '#7c3aed',
+            primaryTextColor: '#19105B',
+            lineColor: '#7c3aed',
+            secondaryColor: '#ecfdf5',
+            tertiaryColor: '#fef3c7'
+        }
+    });
+</script>
+
+</body>
+</html>
