@@ -159,3 +159,31 @@ async def search_employee_proofs(
         ]
     except Exception:
         return []
+
+
+
+async def compute_semantic_skill_scores(
+    db: Session,
+    role_text: str,
+    employee_ids: list[str],
+) -> dict[str, float]:
+    """Compute cosine similarity between role_text embedding and each employee's skill embedding.
+    Returns {employee_id: similarity_score (0-1)}."""
+    if not role_text.strip() or not employee_ids:
+        return {}
+
+    count = db.execute(text("SELECT COUNT(*) FROM employee_skill_embeddings")).scalar()
+    if not count:
+        return {}
+
+    try:
+        vec = (await _embed([role_text]))[0]
+        rows = db.execute(text("""
+            SELECT employee_id,
+                   ROUND((1 - (embedding <=> CAST(:vec AS vector)))::numeric, 4) AS similarity
+            FROM employee_skill_embeddings
+            WHERE employee_id = ANY(:ids)
+        """), {"vec": str(vec), "ids": employee_ids}).fetchall()
+        return {r.employee_id: max(0.0, float(r.similarity)) for r in rows}
+    except Exception:
+        return {}

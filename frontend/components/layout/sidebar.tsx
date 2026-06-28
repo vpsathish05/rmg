@@ -27,48 +27,32 @@ export default function Sidebar({ userName = "RMG User" }: { userName?: string }
     .slice(0, 2) || "RG";
 
   return (
-    <aside
-      className="w-56 shrink-0 flex flex-col bg-white"
-      style={{ borderRight: "1px solid #E8E8E8" }}
-    >
+    <aside className="w-[220px] shrink-0 flex flex-col bg-white border-r border-gray-100">
       {/* Brand */}
-      <div className="px-5 pt-6 pb-5" style={{ borderBottom: "1px solid #F2F2F2" }}>
+      <div className="px-5 pt-6 pb-5 border-b border-gray-50">
         <div className="flex items-center gap-2.5">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 font-black text-xs text-white"
-            style={{ background: "#19105B" }}
-          >
-            JG
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-black text-sm text-white bg-gradient-to-br from-violet-700 to-violet-900">
+            J
           </div>
           <div>
-            <p className="text-sm font-bold leading-none" style={{ color: "#19105B" }}>RMG Engine</p>
-            <p className="text-[10px] mt-0.5 font-medium" style={{ color: "#94A3B8" }}>JMan Group</p>
+            <p className="text-sm font-bold text-gray-900 leading-none">RMG Engine</p>
+            <p className="text-[10px] mt-0.5 font-medium text-gray-400">JMan Group</p>
           </div>
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? path === "/" : path.startsWith(href);
           return (
-            <Link
-              key={href}
-              href={href}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150"
-              style={active ? { background: "#3411A3", color: "#fff" } : { color: "#64748B" }}
-              onMouseEnter={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.background = "#F2F2F2";
-                  (e.currentTarget as HTMLElement).style.color = "#19105B";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.background = "transparent";
-                  (e.currentTarget as HTMLElement).style.color = "#64748B";
-                }
-              }}
+            <Link key={href} href={href}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150"
+              style={active
+                ? { background: "#7c3aed", color: "#fff", boxShadow: "0 2px 8px rgba(124,58,237,0.25)" }
+                : { color: "#6b7280" }
+              }
+              onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = "#f3f4f6"; (e.currentTarget as HTMLElement).style.color = "#111827"; }}}
+              onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "#6b7280"; }}}
             >
               <Icon className="w-4 h-4 shrink-0" />
               {label}
@@ -77,44 +61,19 @@ export default function Sidebar({ userName = "RMG User" }: { userName?: string }
         })}
       </nav>
 
-      {/* User profile with sign out */}
-      <div className="px-3 pb-4" style={{ borderTop: "1px solid #F2F2F2", paddingTop: "12px" }}>
-        <div
-          className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg"
-          style={{ background: "#F5F5F5" }}
-        >
-          {/* Avatar */}
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white"
-            style={{ background: "#3411A3" }}
-          >
+      {/* User */}
+      <div className="px-3 pb-4 pt-3 border-t border-gray-50">
+        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-gray-50">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white bg-violet-600">
             {initials}
           </div>
-
-          {/* Name + role */}
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold truncate leading-none" style={{ color: "#19105B" }}>
-              {displayName}
-            </p>
-            <p className="text-[10px] mt-0.5 truncate" style={{ color: "#94A3B8" }}>RMG Lead</p>
+            <p className="text-xs font-semibold truncate text-gray-900">{displayName}</p>
+            <p className="text-[10px] truncate text-gray-400">RMG Lead</p>
           </div>
-
-          {/* Sign out icon — inside the card */}
           <form action={logout}>
-            <button
-              type="submit"
-              title="Sign out"
-              className="w-6 h-6 rounded-md flex items-center justify-center transition-all shrink-0"
-              style={{ color: "#94A3B8" }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "#FFF0F4";
-                (e.currentTarget as HTMLElement).style.color = "#A6265E";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "transparent";
-                (e.currentTarget as HTMLElement).style.color = "#94A3B8";
-              }}
-            >
+            <button type="submit" title="Sign out"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all shrink-0">
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </form>

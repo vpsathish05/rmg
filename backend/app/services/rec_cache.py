@@ -16,8 +16,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.services import scorer as scoring_svc
-from app.services.llm import generate_rationales_batch
-from app.services.kb import search_employee_proofs
+from app.services.llm import generate_rationales_batch, rerank_candidates, generate_smart_hire_signal
+from app.services.kb import search_employee_proofs, compute_semantic_skill_scores
 from app.schemas.recommend import RecommendRequest
 
 log = logging.getLogger(__name__)
@@ -30,10 +30,19 @@ def is_running() -> bool:
     return _running
 
 
-def _auto_coe(db: Session, canonical_roles: list[str]) -> str | None:
-    """Find the most common assessed COE for the given canonical roles."""
+async def _auto_coe(db: Session, canonical_roles: list[str], role_code: str = "", required_skills: str | None = None) -> str | None:
+    """Find the most common assessed COE for the given canonical roles.
+    Falls back to global SQL, then LLM inference."""
     if not canonical_roles:
+        coe = _global_fallback_coe(db)
+        if coe:
+            return coe
+        # LLM fallback
+        available = _get_available_coes(db)
+        if available:
+            return await _llm_detect_coe(role_code, canonical_roles, required_skills, available)
         return None
+
     row = db.execute(text("""
         SELECT INITCAP(TRIM(es.coe)) AS coe, COUNT(*) AS cnt
         FROM employee_skills es
@@ -49,7 +58,83 @@ def _auto_coe(db: Session, canonical_roles: list[str]) -> str | None:
         ORDER BY cnt DESC
         LIMIT 1
     """), {"roles": canonical_roles}).fetchone()
+    if row:
+        return row.coe
+    # Global fallback
+    coe = _global_fallback_coe(db)
+    if coe:
+        return coe
+    # LLM fallback
+    available = _get_available_coes(db)
+    if available:
+        return await _llm_detect_coe(role_code, canonical_roles, required_skills, available)
+    return None
+
+
+def _get_available_coes(db: Session) -> list[str]:
+    rows = db.execute(text("""
+        SELECT DISTINCT INITCAP(TRIM(coe)) AS coe FROM employee_skills
+        WHERE is_assessed = true AND coe IS NOT NULL AND TRIM(coe) != ''
+    """)).fetchall()
+    return [r.coe for r in rows]
+
+
+async def _llm_extract_skills(role_code: str, canonical_roles: list[str], solution: str | None = None) -> str | None:
+    """Use GPT-4o to infer required skills when pipeline data has none."""
+    from app.services.llm import get_client
+    prompt = f"""For a consulting role "{role_code}" (canonical: {', '.join(canonical_roles) if canonical_roles else 'Unknown'}){f', solution: {solution}' if solution else ''}, list the 3-5 most likely required technical skills as a comma-separated list. Be specific and concise. Reply ONLY with the skills list."""
+    try:
+        resp = await get_client().chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=60, temperature=0.3,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        return None
+
+
+def _global_fallback_coe(db: Session) -> str | None:
+    """Return the most common COE across all assessed employees."""
+    row = db.execute(text("""
+        SELECT INITCAP(TRIM(coe)) AS coe, COUNT(*) AS cnt
+        FROM employee_skills
+        WHERE is_assessed = true AND score IS NOT NULL
+          AND coe IS NOT NULL AND TRIM(coe) != ''
+        GROUP BY TRIM(coe)
+        ORDER BY cnt DESC
+        LIMIT 1
+    """)).fetchone()
     return row.coe if row else None
+
+
+async def _llm_detect_coe(role_code: str, canonical_roles: list[str], required_skills: str | None, available_coes: list[str]) -> str | None:
+    """Use GPT-4o to infer the best COE when SQL-based detection fails."""
+    from app.services.llm import get_client
+    coe_list = ", ".join(available_coes)
+    prompt = f"""Given these available COEs in our company: [{coe_list}]
+
+Which COE best matches this role?
+- Role code: {role_code}
+- Canonical roles: {', '.join(canonical_roles) if canonical_roles else 'Unknown'}
+- Required skills: {required_skills or 'Not specified'}
+
+Reply with ONLY the COE name from the list above. Nothing else."""
+    try:
+        resp = await get_client().chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=20,
+            temperature=0,
+        )
+        answer = resp.choices[0].message.content.strip()
+        # Match against available COEs (case-insensitive)
+        for coe in available_coes:
+            if coe.lower() == answer.lower():
+                return coe
+        return available_coes[0] if available_coes else None
+    except Exception:
+        return None
 
 
 def _fmt_candidate(c, kb_proofs: dict) -> dict:
@@ -68,6 +153,7 @@ def _fmt_candidate(c, kb_proofs: dict) -> dict:
         "avail_score":           c.avail_score,
         "prod_score":            c.prod_score,
         "has_competency":        c.has_competency,
+        "semantic_score":        c.semantic_score,
         "rationale":             c.rationale,
         "kb_proof":              kb_proofs.get(c.employee_id, []),
     }
@@ -113,12 +199,23 @@ async def compute_all(db: Session) -> dict:
         for role in roles:
             try:
                 canonical = role.canonical_roles or []
-                coe = _auto_coe(db, canonical)
+                coe = await _auto_coe(db, canonical, role.role_code_raw or "", role.required_skills)
 
                 if not coe:
                     _upsert_error(db, role.id, "no COE detected")
                     errors += 1
                     continue
+
+                # Compute semantic skill scores
+                role_skills = role.required_skills
+                if not role_skills or role_skills.strip().lower() == 'nan':
+                    role_skills = await _llm_extract_skills(role.role_code_raw or "", canonical)
+
+                role_query = f"{role.role_code_raw or ''} {coe} {role_skills or ''}".strip().replace("nan", "")
+                all_ids = [r.employee_id for r in db.execute(text(
+                    "SELECT employee_id FROM employees WHERE account_status=true AND is_active_version=true AND date_of_resignation IS NULL"
+                )).fetchall()]
+                semantic_scores = await compute_semantic_skill_scores(db, role_query, all_ids) if role_query else None
 
                 # Score all candidates
                 scored = scoring_svc.score_all(
@@ -127,11 +224,31 @@ async def compute_all(db: Session) -> dict:
                     always_best_match=False,
                     coe=coe,
                     requested_alloc_pct=float(role.allocation_pct or 100),
+                    semantic_scores=semantic_scores,
                 )
 
                 if not scored:
-                    skipped += 1
-                    _upsert_error(db, role.id, "scorer returned 0 candidates")
+                    # No candidates is a valid "no resource" result, not an error
+                    _hire_req = RecommendRequest(
+                        role_code=role.role_code_raw or "Unknown",
+                        coe=coe,
+                        allocation_pct=float(role.allocation_pct or 100),
+                        duration_weeks=role.duration_weeks,
+                        skills_required=role_skills,
+                    )
+                    hire_signal = await generate_smart_hire_signal(_hire_req, 0, [])
+                    db.execute(text("""
+                        INSERT INTO role_recommendations
+                            (pipeline_role_id, coe, available, best_match, no_resource,
+                             hire_signal, kb_active, total_evaluated, computed_at, status)
+                        VALUES (:rid, :coe, '[]'::jsonb, '[]'::jsonb, true, :hire_signal, false, 0, NOW(), 'done')
+                        ON CONFLICT (pipeline_role_id) DO UPDATE SET
+                            coe = EXCLUDED.coe, available = '[]'::jsonb, best_match = '[]'::jsonb,
+                            no_resource = true, hire_signal = EXCLUDED.hire_signal,
+                            kb_active = false, total_evaluated = 0, computed_at = NOW(), status = 'done'
+                    """), {"rid": role.id, "coe": coe, "hire_signal": hire_signal})
+                    db.commit()
+                    done += 1
                     continue
 
                 # GPT rationale for top 10 (concurrent per role)
@@ -140,14 +257,17 @@ async def compute_all(db: Session) -> dict:
                     coe=coe,
                     allocation_pct=float(role.allocation_pct or 100),
                     duration_weeks=role.duration_weeks,
-                    skills_required=role.required_skills,
+                    skills_required=role_skills if role_skills and role_skills.lower() != 'nan' else None,
                 )
                 scored = await generate_rationales_batch(scored, fake_req, top_n=10)
 
+                # AI Re-ranking of top 10 candidates
+                scored = await rerank_candidates(scored, fake_req, top_n=10)
+
                 # KB proofs for top 6 (Available + BestMatch)
                 query_text = (
-                    f"{role.role_code_raw or ''} {coe} {role.required_skills or ''}"
-                ).strip()
+                    f"{role.role_code_raw or ''} {coe} {role_skills or ''}"
+                ).strip().replace("nan", "")
                 top6 = [c for c in scored if c.category in ("Available", "BestMatch")][:6]
                 proof_results = await asyncio.gather(
                     *[search_employee_proofs(db, c.employee_id, query_text) for c in top6],
@@ -167,11 +287,8 @@ async def compute_all(db: Session) -> dict:
 
                 hire_signal = None
                 if no_resource:
-                    hire_signal = (
-                        f"No internal candidate available for '{role.role_code_raw}' in {coe}. "
-                        f"{len(scored)} evaluated — all at capacity or lack {coe} skills. "
-                        f"Consider external hire or adjacent COE redeployment."
-                    )
+                    top_stretch = [c for c in scored if c.category == "Stretch"][:3]
+                    hire_signal = await generate_smart_hire_signal(fake_req, len(scored), top_stretch)
 
                 # Upsert
                 db.execute(text("""

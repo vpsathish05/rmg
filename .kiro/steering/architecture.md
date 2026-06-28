@@ -4,7 +4,7 @@
 AI-powered Resource Management System for JMan Group. Replaces manual email-based resource negotiation.
 
 ### Use Cases
-- UC1: RMG Engine — 3-panel view (Pipeline → Extensions → Email Requests) with inline recommendation per role
+- UC1: RMG Engine — 3-tab view (Pipeline → Extensions → Changes) with AI-powered recommendation per role
 - UC2: Demand Forecasting — pipeline requests with 6-month outlook, weighted FTE
 - UC3: Availability Dashboard — employee allocation status with billability tracking
 - UC4: Project Health — RAG from WSR data, overrunning & ramp-down detection
@@ -13,8 +13,20 @@ AI-powered Resource Management System for JMan Group. Replaces manual email-base
 ```
 With competency:    total = skill×0.40 + competency×0.25 + availability×0.25 + productivity×0.10
 Without competency: total = skill×0.65 + availability×0.25 + productivity×0.10
+
+skill_score = 0.5 × COE_skill_score + 0.5 × semantic_similarity (when embeddings available)
 ```
-Categories: Available (has capacity) → BestMatch (allocated but scored well) → Stretch (poor fit)
+Categories: Available (has capacity) → BestMatch (score ≥ 0.40, allocated) → Stretch (poor fit)
+
+### AI Pipeline (per role recommendation)
+1. **COE Detection**: SQL role-based → SQL global fallback → GPT-4o inference
+2. **Skills Extraction**: LLM infers required skills when pipeline data has null/nan
+3. **Semantic Skill Match**: Embed role query → cosine similarity vs employee skill embeddings
+4. **Formula Scoring**: Weighted sum (skill + competency + availability + productivity)
+5. **Rationale Generation**: GPT-4o 2-3 sentence explanation per top 10 candidates
+6. **LLM Re-Ranking**: GPT-4o re-orders top 10 based on holistic fit
+7. **KB Proof**: pgvector search for past project evidence
+8. **Smart Hire Signal**: GPT-4o generates actionable hiring profile when no match
 
 ## Tech Stack
 | Layer | Technology | Version |
@@ -25,7 +37,7 @@ Categories: Available (has capacity) → BestMatch (allocated but scored well) �
 | Data fetching | TanStack Query | 5.101.1 |
 | HTTP client | Axios | 1.18.1 |
 | Backend | FastAPI + Uvicorn | ≥0.111.0 |
-| Database | Neon PostgreSQL 18 + pgvector | psycopg2-binary |
+| Database | Azure PostgreSQL Flexible Server + pgvector | psycopg2-binary |
 | ORM | SQLAlchemy 2.x | ≥2.0.0 |
 | AI | OpenAI (gpt-4o + text-embedding-3-small 1536d) | ≥1.30.0 |
 | Email | Microsoft Graph API (httpx) | ≥0.27.0 |
@@ -39,11 +51,12 @@ rmg/
 │   ├── app/
 │   │   ├── layout.tsx              ← Root layout (Inter font, Providers)
 │   │   ├── providers.tsx           ← TanStack QueryClientProvider
-│   │   ├── (auth)/login/           ← Login page
+│   │   ├── icon.svg               ← Favicon (purple J)
+│   │   ├── (auth)/login/           ← Login page (centered, no sidebar)
 │   │   └── (app)/                  ← Authenticated route group
 │   │       ├── layout.tsx          ← Sidebar + main layout
 │   │       ├── page.tsx            ← Dashboard
-│   │       ├── rmg-engine/         ← 3-panel RMG Engine (main screen)
+│   │       ├── rmg-engine/         ← 3-tab RMG Engine (main screen)
 │   │       ├── availability/       ← Employee availability
 │   │       ├── forecast/           ← Pipeline forecasting
 │   │       ├── projects/           ← Project health
@@ -60,8 +73,8 @@ rmg/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                ← FastAPI app, CORS, lifespan (webhook + scheduler)
-│   │   ├── config.py             ← pydantic-settings
-│   │   ├── database.py           ← SQLAlchemy engine + session
+│   │   ├── config.py             ← pydantic-settings (Azure PG + OpenAI + Graph)
+│   │   ├── database.py           ← SQLAlchemy engine + session (Azure AD token support)
 │   │   ├── models/               ← 11 ORM models
 │   │   ├── routers/
 │   │   │   ├── rmg_engine.py     ← Main endpoints (pipeline, extensions, recommend, KB, cache)
@@ -75,19 +88,21 @@ rmg/
 │   │   │   └── health.py         ← Health check
 │   │   ├── schemas/              ← Pydantic request/response
 │   │   └── services/
-│   │       ├── scorer.py         ← Core scoring engine
-│   │       ├── llm.py            ← GPT-4o rationale (batch parallel)
-│   │       ├── kb.py             ← pgvector KB build + search
-│   │       ├── rec_cache.py      ← Nightly pre-compute
+│   │       ├── scorer.py         ← Core scoring engine (formula + semantic blend)
+│   │       ├── llm.py            ← GPT-4o: rationale, re-ranking, hire signals
+│   │       ├── kb.py             ← pgvector KB build + search + semantic skill scoring
+│   │       ├── rec_cache.py      ← Nightly pre-compute (full AI pipeline)
 │   │       ├── email_parser.py   ← GPT-4o email parsing
 │   │       └── graph.py          ← Microsoft Graph client
 │   ├── etl/
 │   │   ├── schema.sql            ← 12 tables DDL
-│   │   ├── migrate_add_rec_cache.py ← 13th table migration
-│   │   ├── load_all.py           ← Master ETL
-│   │   ├── loaders/              ← 9 data loaders
-│   │   ├── build_kb.py           ← Standalone KB rebuild
-│   │   └── compute_recommendations.py ← Standalone rec compute
+│   │   ├── migrate_add_rec_cache.py    ← role_recommendations table
+│   │   ├── migrate_ai_tables.py        ← employee_skill_embeddings table
+│   │   ├── load_all.py                 ← Master ETL
+│   │   ├── loaders/                    ← 9 data loaders
+│   │   ├── build_kb.py                 ← Project embeddings rebuild
+│   │   ├── build_skill_embeddings.py   ← Employee skill profile embeddings
+│   │   └── compute_recommendations.py  ← Standalone rec compute
 │   └── requirements.txt
 └── docs/                          ← Source data (CSV, XLSX)
 ```
@@ -96,13 +111,13 @@ rmg/
 
 ### Request Path
 ```
-Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy → Neon PostgreSQL
-                                                              → OpenAI API (rationale + embeddings)
+Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy → Azure PostgreSQL
+                                                              → OpenAI API (embeddings + chat)
 ```
 
 ### RMG Engine (instant): GET /api/rmg/pipeline + GET /api/rmg/recommendations (pre-computed JSONB)
-### Inline Recommend: POST /api/rmg/recommend-role → scorer → LLM rationale → KB proofs
-### Nightly 2am IST: APScheduler → rec_cache.compute_all() → UPSERT role_recommendations
+### Inline Recommend: POST /api/rmg/recommend-role → semantic scoring → scorer → LLM rationale → KB proofs
+### Nightly 2am IST: APScheduler → rec_cache.compute_all() → full AI pipeline → UPSERT role_recommendations
 ### Email Webhook: Graph POST → background: fetch message → GPT parse → INSERT email_requests
 
 ## API Routes
@@ -114,23 +129,38 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 | `/api/allocations` | allocations.py | Allocation CRUD |
 | `/api/recommend` | recommend.py | Manual recommendation |
 | `/api/forecast` | forecast.py | Pipeline + outlook |
-| `/api/rmg/*` | rmg_engine.py | Pipeline, extensions, inline recommend, KB, cache |
+| `/api/rmg/*` | rmg_engine.py | Pipeline, extensions, recommend, KB, cache, auto-coe |
 | `/api/webhooks/email` | webhooks.py | Graph notifications |
 
-## Database: 13 Tables
+## Database: 14 Tables (Azure PostgreSQL)
 employees, projects, project_coes, allocations, timesheets, weekly_status,
 employee_skills, employee_competencies, role_mapping, pipeline_requests,
-email_requests, project_embeddings, role_recommendations
+email_requests, project_embeddings, role_recommendations, **employee_skill_embeddings**
 
-Key pattern: `is_active_version = true` filter on most queries (soft-versioning).
+Key patterns:
+- `is_active_version = true` filter on most queries (soft-versioning)
+- `(end_date IS NULL OR end_date >= CURRENT_DATE)` for active allocations
+- `score > 0` filter for meaningful skill scores
+
+## AI Integration Summary
+| Service | Model | Purpose | When |
+|---------|-------|---------|------|
+| Semantic embeddings | text-embedding-3-small | Employee skill profiles + role query matching | ETL + per-role |
+| COE detection | gpt-4o | Infer COE when SQL fails | Per-role (fallback only) |
+| Skills extraction | gpt-4o | Infer required skills from role name | Per-role (null skills only) |
+| Rationale | gpt-4o | 2-3 sentence candidate explanation | Top 10 per role |
+| Re-ranking | gpt-4o | Holistic re-ordering of top 10 | Per role |
+| Hire signal | gpt-4o | Actionable hiring profile | no_resource roles only |
+| KB proof | text-embedding-3-small | Past project evidence via cosine search | Top 6 per role |
+| Email parsing | gpt-4o | Structured extraction from emails | Per email |
 
 ## Conventions
 - Backend: one router file per domain in `backend/app/routers/`
 - Frontend: ALL API calls centralized in `lib/hooks.ts` — never call Axios from components
-- Brand colors defined as constants (C.MIDNIGHT=#19105B, C.TRYPAN=#3411A3, C.ROSE=#FF6196, etc.)
+- UI: modern rounded-2xl design, violet accent palette, inline styles for brand colors
 - Sidebar: 3 top-level routes — RMG Engine, Forecast, Dashboard
-- Scoring categories: Available / BestMatch / Stretch
-- Auth: custom JWT (jose), httpOnly cookie, 8h expiry, credentials from env vars
+- Scoring categories: Available / BestMatch (≥0.40) / Stretch
+- Auth: custom JWT (jose), httpOnly cookie, 8h expiry
 - Layered: Routers (thin) → Services (logic) → Database
 - Batch SQL in scorer (5 queries then in-memory scoring — avoids complex joins)
 - Parallel AI: asyncio.gather() for rationale + KB lookups
@@ -139,14 +169,15 @@ Key pattern: `is_active_version = true` filter on most queries (soft-versioning)
 ## Critical Files
 | File | Role |
 |------|------|
-| `backend/app/services/scorer.py` | Core scoring formula + categorization |
-| `backend/app/services/rec_cache.py` | Nightly orchestrator (scorer + LLM + KB) |
+| `backend/app/services/scorer.py` | Core scoring formula + semantic blend + categorization |
+| `backend/app/services/rec_cache.py` | Nightly AI orchestrator (all 8 steps) |
+| `backend/app/services/llm.py` | All GPT-4o calls: rationale, rerank, hire signal |
+| `backend/app/services/kb.py` | pgvector build + search + semantic skill scoring |
 | `backend/app/routers/rmg_engine.py` | Largest router — main operational screen |
-| `backend/etl/schema.sql` | Schema source of truth (12 tables) |
+| `backend/etl/schema.sql` | Schema source of truth |
+| `backend/etl/build_skill_embeddings.py` | Employee skill embedding ETL |
 | `frontend/lib/hooks.ts` | All TS interfaces + query hooks (API contract) |
 | `backend/app/main.py` | Lifespan, scheduler, all router mounts |
-| `backend/app/services/kb.py` | pgvector build + cosine search |
-| `backend/app/services/email_parser.py` | GPT-4o structured parsing |
 
 ## Running Locally
 ```bash
@@ -156,4 +187,27 @@ uvicorn app.main:app --reload --port 8000
 
 # Frontend
 cd frontend && npm run dev  # → localhost:3000
+```
+
+## Database Connection
+```env
+# Azure PostgreSQL (static auth)
+DATABASE_URL=postgresql://adminuser:<password>@rg-tenaliaiaz-prod-uksouth-02.postgres.database.azure.com:5432/postgres?sslmode=require
+```
+
+## ETL Commands
+```bash
+cd backend && source .venv/bin/activate
+
+# Load source data
+python -m etl.load_all
+
+# Build project KB embeddings
+python -m etl.build_kb
+
+# Build employee skill embeddings
+python -m etl.build_skill_embeddings
+
+# Compute all recommendations (full AI pipeline)
+python -m etl.compute_recommendations
 ```

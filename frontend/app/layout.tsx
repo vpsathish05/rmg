@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "RMG — Resource Management",
+  title: "RMG Resource Management",
   description: "JMan Group Resource Management System",
 };
 

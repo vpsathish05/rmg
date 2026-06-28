@@ -42,6 +42,7 @@ class CandidateScore:
     total_score: float
     has_competency: bool
     category: str   # Available / BestMatch / Stretch
+    semantic_score: float | None = field(default=None)
     rationale: str | None = field(default=None)
 
 
@@ -55,6 +56,7 @@ def score_all(
     always_best_match: bool,
     coe: str,
     requested_alloc_pct: float,
+    semantic_scores: dict[str, float] | None = None,
 ) -> list[CandidateScore]:
     """Score every eligible employee and return sorted list (best first)."""
 
@@ -80,6 +82,17 @@ def score_all(
               AND canonical_role = ANY(:roles)
         """), {"roles": canonical_roles}).fetchall()
 
+        # Fallback: if role-filtered pool is empty, widen to all employees
+        if not emp_rows:
+            emp_rows = db.execute(text("""
+                SELECT employee_id, job_name, canonical_role, location, department_name
+                FROM employees
+                WHERE account_status = true
+                  AND is_active_version = true
+                  AND date_of_resignation IS NULL
+                  AND job_name IS NOT NULL
+            """)).fetchall()
+
     if not emp_rows:
         return []
 
@@ -92,6 +105,7 @@ def score_all(
         WHERE employee_id = ANY(:ids)
           AND is_active = true
           AND is_active_version = true
+          AND (end_date IS NULL OR end_date >= CURRENT_DATE)
         GROUP BY employee_id
     """), {"ids": emp_ids}).fetchall()
     alloc_cache: dict[str, float] = {r.employee_id: float(r.total_pct) for r in alloc_rows}
@@ -104,6 +118,7 @@ def score_all(
           AND LOWER(coe) = :coe
           AND is_assessed = true
           AND score IS NOT NULL
+          AND score > 0
     """), {"ids": emp_ids, "coe": _normalize_coe(coe)}).fetchall()
     skill_cache: dict[str, list[float]] = {}
     for r in skill_rows:
@@ -156,11 +171,20 @@ def score_all(
         # Skill (SKILL_NEUTRAL when employee has skills data but not for this COE)
         scores = skill_cache.get(eid, [])
         if scores:
-            skill_score = sum(scores) / len(scores) / 5.0
+            coe_skill_score = sum(scores) / len(scores) / 5.0
         elif eid in has_any_skill:
-            skill_score = SKILL_NEUTRAL   # assessed in other COEs, not this one
+            coe_skill_score = SKILL_NEUTRAL   # assessed in other COEs, not this one
         else:
-            skill_score = 0.0             # never assessed
+            coe_skill_score = 0.0             # never assessed
+
+        # Blend with semantic score if available (50/50)
+        sem = semantic_scores.get(eid) if semantic_scores else None
+        if sem is not None and coe_skill_score > 0:
+            skill_score = 0.5 * coe_skill_score + 0.5 * sem
+        elif sem is not None:
+            skill_score = sem
+        else:
+            skill_score = coe_skill_score
 
         # Competency
         comp_scores = comp_cache.get(eid, [])
@@ -188,7 +212,7 @@ def score_all(
         # Category — availability drives the primary split; score ranks within each group
         if available >= requested_alloc_pct:
             category = "Available"
-        elif total >= 0.20:
+        elif total >= 0.40:
             category = "BestMatch"   # allocated but has measurable fit — discuss reallocation
         else:
             category = "Stretch"     # allocated AND weak fit
@@ -208,6 +232,7 @@ def score_all(
             total_score=round(total, 3),
             has_competency=has_comp,
             category=category,
+            semantic_score=round(sem, 3) if sem is not None else None,
         ))
 
     results.sort(key=lambda c: c.total_score, reverse=True)

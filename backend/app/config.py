@@ -2,8 +2,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str
+    database_url: str = ""
     openai_api_key: str
+
+    # Azure PostgreSQL (AAD token auth)
+    azure_pg_host: str = ""
+    azure_pg_user: str = ""
+    azure_pg_port: int = 5432
+    azure_pg_database: str = "postgres"
 
     # Microsoft Graph (reads GRAPH_* env vars)
     graph_client_id: str = ""

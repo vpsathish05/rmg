@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.services import scorer as scoring_svc
 from app.services.llm import generate_rationales_batch
-from app.services.kb import search_employee_proofs
+from app.services.kb import search_employee_proofs, compute_semantic_skill_scores
 
 router = APIRouter()
 
@@ -51,9 +51,10 @@ def get_pipeline(db: Session = Depends(get_db)):
                 'canonical_roles', canonical_roles,
                 'allocation_pct',  allocation_pct,
                 'duration_weeks',  duration_weeks,
-                'required_skills', required_skills,
+                'required_skills', NULLIF(required_skills, 'nan'),
                 'status',          status,
-                'comments',        comments
+                'comments',        NULLIF(comments, 'nan'),
+                'resourced_employee_id', resourced_employee_id
             ) ORDER BY id) AS roles
         FROM pipeline_requests
         WHERE client_name IS NOT NULL
@@ -197,12 +198,24 @@ async def recommend_for_role(
     db: Session = Depends(get_db),
 ):
     """Score candidates for a specific pipeline role. Returns Available/BestMatch/NoResource."""
+    # Compute semantic skill scores if required_skills provided
+    semantic_scores = None
+    role_query = f"{req.role_code} {req.coe} {req.required_skills or ''}".strip().replace("nan", "")
+    if role_query:
+        # Get all candidate IDs first for semantic scoring
+        from sqlalchemy import text as sa_text
+        all_ids = [r.employee_id for r in db.execute(sa_text(
+            "SELECT employee_id FROM employees WHERE account_status=true AND is_active_version=true AND date_of_resignation IS NULL"
+        )).fetchall()]
+        semantic_scores = await compute_semantic_skill_scores(db, role_query, all_ids)
+
     scored = scoring_svc.score_all(
         db=db,
         canonical_roles=req.canonical_roles,
         always_best_match=req.always_best_match,
         coe=req.coe,
         requested_alloc_pct=req.allocation_pct,
+        semantic_scores=semantic_scores,
     )
 
     # Rationale for top 10
@@ -221,7 +234,7 @@ async def recommend_for_role(
     kb_active = False
     kb_proofs: dict[str, list] = {}
     if req.with_kb_proof:
-        query_text = f"{req.role_code} {req.coe} {req.required_skills or ''}"
+        query_text = f"{req.role_code} {req.coe} {req.required_skills or ''}".strip().replace("nan", "")
         top_candidates = [c for c in scored if c.category in ("Available", "BestMatch")][:6]
         proof_tasks = [
             search_employee_proofs(db, c.employee_id, query_text)
@@ -254,17 +267,18 @@ async def recommend_for_role(
             "avail_score":          c.avail_score,
             "prod_score":           c.prod_score,
             "has_competency":       c.has_competency,
+            "semantic_score":       c.semantic_score,
             "rationale":            c.rationale,
             "kb_proof":             kb_proofs.get(c.employee_id, []),
         }
 
     hire_signal = None
     if no_resource:
-        hire_signal = (
-            f"No internal candidate available for '{req.role_code}' in {req.coe}. "
-            f"{len(scored)} evaluated — all at capacity or lack {req.coe} skills. "
-            f"Consider external hire or adjacent COE redeployment."
-        )
+        from app.services.llm import generate_smart_hire_signal
+        top_stretch = [c for c in scored if c.category == "Stretch"][:3]
+        from app.schemas.recommend import RecommendRequest as RR
+        hire_req = RR(role_code=req.role_code, coe=req.coe, allocation_pct=req.allocation_pct, skills_required=req.required_skills)
+        hire_signal = await generate_smart_hire_signal(hire_req, len(scored), top_stretch)
 
     return {
         "available":   [_fmt(c) for c in available],
@@ -299,8 +313,10 @@ def kb_status(db: Session = Depends(get_db)):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/auto-coe")
-def get_auto_coe(
+async def get_auto_coe(
     canonical_roles: list[str] = Query(default=[]),
+    role_code: str = Query(default=""),
+    required_skills: str = Query(default=""),
     db: Session = Depends(get_db),
 ):
     """Find the most common assessed COE for employees with the given canonical roles."""
@@ -322,7 +338,46 @@ def get_auto_coe(
         LIMIT 1
     """), {"roles": canonical_roles}).fetchone()
 
-    return {"coe": row.coe if row else None}
+    if row:
+        return {"coe": row.coe}
+
+    # Fallback: most common COE across all employees
+    fallback = db.execute(text("""
+        SELECT INITCAP(TRIM(coe)) AS coe, COUNT(*) AS cnt
+        FROM employee_skills
+        WHERE is_assessed = true AND score IS NOT NULL
+          AND coe IS NOT NULL AND TRIM(coe) != ''
+        GROUP BY TRIM(coe)
+        ORDER BY cnt DESC
+        LIMIT 1
+    """)).fetchone()
+
+    if fallback:
+        return {"coe": fallback.coe}
+
+    # LLM fallback
+    available_rows = db.execute(text("""
+        SELECT DISTINCT INITCAP(TRIM(coe)) AS coe FROM employee_skills
+        WHERE is_assessed = true AND coe IS NOT NULL AND TRIM(coe) != ''
+    """)).fetchall()
+    available = [r.coe for r in available_rows]
+    if available:
+        from app.services.llm import get_client
+        try:
+            coe_list = ", ".join(available)
+            resp = await get_client().chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": f"Given COEs: [{coe_list}]. Which best matches role '{role_code}' ({', '.join(canonical_roles)}) with skills '{required_skills}'? Reply ONLY the COE name."}],
+                max_tokens=20, temperature=0,
+            )
+            answer = resp.choices[0].message.content.strip()
+            for coe in available:
+                if coe.lower() == answer.lower():
+                    return {"coe": coe}
+        except Exception:
+            pass
+
+    return {"coe": available[0] if available else None}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

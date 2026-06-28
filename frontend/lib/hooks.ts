@@ -164,6 +164,7 @@ export interface PipelineRole {
   required_skills: string | null;
   status: string | null;
   comments: string | null;
+  resourced_employee_id: string | null;
 }
 
 export interface PipelineProject {
