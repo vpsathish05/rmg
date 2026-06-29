@@ -152,3 +152,46 @@ def search_employees(q: str = "", db: Session = Depends(get_db)):
         LIMIT 20
     """), {"q": f"%{q}%"}).fetchall()
     return [{"id": r.employee_id, "job_name": r.job_name, "role": r.canonical_role} for r in rows]
+
+
+
+@router.get("/top")
+def top_projects_and_resources(db: Session = Depends(get_db)):
+    """Top 10 projects by team size + top 10 resources by project count."""
+    projects = db.execute(text("""
+        SELECT p.project_id, p.client_id, p.proposition_coe, p.project_start_date, p.project_end_date,
+               COUNT(DISTINCT a.employee_id) AS team_size
+        FROM projects p
+        JOIN allocations a ON a.project_id = p.project_id AND a.is_active_version = true AND a.is_active = true
+        WHERE p.is_active_version = true AND UPPER(p.project_status) = 'ACTIVE' AND p.client_id != 'CLIENT_127'
+        GROUP BY p.project_id, p.client_id, p.proposition_coe, p.project_start_date, p.project_end_date
+        ORDER BY COUNT(DISTINCT a.employee_id) DESC
+        LIMIT 10
+    """)).fetchall()
+
+    resources = db.execute(text("""
+        SELECT e.employee_id, e.job_name, e.canonical_role, e.location,
+               COUNT(DISTINCT a.project_id) AS project_count,
+               COALESCE(SUM(a.allocation_pct), 0) AS total_alloc
+        FROM employees e
+        JOIN allocations a ON a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true
+        WHERE e.account_status = true AND e.is_active_version = true AND e.date_of_resignation IS NULL
+          AND e.job_name IS NOT NULL
+        GROUP BY e.employee_id, e.job_name, e.canonical_role, e.location
+        ORDER BY COUNT(DISTINCT a.project_id) DESC, SUM(a.allocation_pct) DESC
+        LIMIT 10
+    """)).fetchall()
+
+    return {
+        "projects": [{
+            "project_id": r.project_id, "client": r.client_id, "coe": r.proposition_coe,
+            "start": r.project_start_date.isoformat() if r.project_start_date else None,
+            "end": r.project_end_date.isoformat() if r.project_end_date else None,
+            "team_size": int(r.team_size),
+        } for r in projects],
+        "resources": [{
+            "employee_id": r.employee_id, "job_name": r.job_name, "role": r.canonical_role,
+            "location": r.location, "project_count": int(r.project_count),
+            "total_alloc": float(r.total_alloc),
+        } for r in resources],
+    }

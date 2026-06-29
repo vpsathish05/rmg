@@ -257,6 +257,18 @@ export function useEmployeeSearch(q: string) {
   });
 }
 
+export interface TopData {
+  projects: { project_id: string; client: string; coe: string | null; start: string | null; end: string | null; team_size: number }[];
+  resources: { employee_id: string; job_name: string | null; role: string | null; location: string | null; project_count: number; total_alloc: number }[];
+}
+
+export function useLifecycleTop() {
+  return useQuery<TopData>({
+    queryKey: ["lifecycle-top"],
+    queryFn: () => api.get("/api/resource-map/top").then((r) => r.data),
+  });
+}
+
 // ── RMG Engine ────────────────────────────────────────────────────────────────
 
 export interface PipelineRole {
