@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 async def _process_notification(message_id: str, db: Session) -> None:
     """Fetch full email, extract PDF if attached, parse with GPT, store and route."""
     from app.config import settings
-    from app.services.graph import get_message, get_attachment
+    from app.services.graph import get_message, get_attachments
     from app.services.email_parser import parse_email
     from sqlalchemy import text
 
@@ -189,13 +189,16 @@ async def process_latest(db: Session = Depends(get_db)):
     async with httpx.AsyncClient() as c:
         r = await c.get(
             f"https://graph.microsoft.com/v1.0/users/{settings.graph_mailbox}/messages"
-            "?$filter=startswith(subject,'Resource Request')&$top=5&$orderby=receivedDateTime desc"
-            "&$select=id,subject,from,receivedDateTime,hasAttachments,body",
+            "?$top=10&$orderby=receivedDateTime desc"
+            "&$select=id,subject,from,receivedDateTime,hasAttachments",
             headers={"Authorization": f"Bearer {token}"},
         )
         if r.status_code >= 400:
             return {"status": "error", "message": f"Graph API {r.status_code}: {r.text[:200]}"}
         messages = r.json().get("value", [])
+
+    # Filter for "Resource Request" subject in code
+    messages = [m for m in messages if "resource request" in (m.get("subject") or "").lower()]
 
     processed = []
     for msg in messages:
@@ -204,7 +207,10 @@ async def process_latest(db: Session = Depends(get_db)):
         existing = db.execute(sql_text("SELECT id FROM email_requests WHERE outlook_message_id = :mid"), {"mid": mid}).fetchone()
         if existing:
             continue
-        await _process_notification(mid, db)
-        processed.append({"id": mid, "subject": msg.get("subject"), "from": ((msg.get("from") or {}).get("emailAddress") or {}).get("address")})
+        try:
+            await _process_notification(mid, db)
+            processed.append({"id": mid, "subject": msg.get("subject"), "from": ((msg.get("from") or {}).get("emailAddress") or {}).get("address")})
+        except Exception as e:
+            processed.append({"id": mid, "subject": msg.get("subject"), "error": str(e)})
 
     return {"status": "done", "processed": len(processed), "emails": processed}

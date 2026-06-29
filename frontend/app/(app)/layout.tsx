@@ -1,4 +1,5 @@
 import Sidebar from "@/components/layout/sidebar";
+import ChatPanel from "@/components/chat-panel";
 import { getSession } from "@/lib/session";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -9,6 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main className="flex-1 flex flex-col min-h-full overflow-auto">
         {children}
       </main>
+      <ChatPanel />
     </>
   );
 }

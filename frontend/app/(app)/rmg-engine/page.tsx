@@ -990,6 +990,160 @@ function ExtensionsView() {
 
 
 // ── Changes View ───────────────────────────────────────────────────────────
+function ChangeRequestCard({ r }: { r: { id: string; source_email: string | null; received_at: string | null; request_type: string | null; parsed_json: Record<string, unknown> | null; status: string | null } }) {
+  const [expanded, setExpanded] = useState(false);
+  const [recEntry, setRecEntry] = useState<CacheEntry | undefined>(undefined);
+  const loadedRef = useRef(false);
+
+  const parsed = r.parsed_json ?? {};
+  const changeType = (parsed.change_type as string) || "";
+  const isReplace = changeType.toLowerCase() === "replace" || r.request_type === "CHANGE";
+  const roleCode = (parsed.role as string) || (parsed.change_details as string)?.match(/Senior Software Engineer|SSE|Developer|Analyst|Consultant|Engineer|Manager|Lead/i)?.[0] || "Unknown";
+
+  const loadRecommendation = useCallback(async () => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    setRecEntry({ status: "loading" });
+    try {
+      const canonicalRole = roleCode !== "Unknown" ? roleCode : null;
+      const params = new URLSearchParams();
+      if (canonicalRole) params.append("canonical_roles", canonicalRole);
+      const { data: coeData } = await api.get(`/api/rmg/auto-coe?${params.toString()}`);
+      const coe: string | null = coeData.coe;
+      if (!coe) { setRecEntry({ status: "error" }); return; }
+      const { data } = await api.post("/api/rmg/recommend-role", {
+        role_code: roleCode,
+        canonical_roles: canonicalRole ? [canonicalRole] : [],
+        coe,
+        allocation_pct: 100,
+        required_skills: null,
+        with_rationale: true,
+        with_kb_proof: true,
+      });
+      setRecEntry({ status: "done", coe, data });
+    } catch {
+      setRecEntry({ status: "error" });
+      loadedRef.current = false;
+    }
+  }, [roleCode]);
+
+  const handleToggle = () => {
+    if (!expanded && isReplace) loadRecommendation();
+    setExpanded(!expanded);
+  };
+
+  return (
+    <div className={`border rounded-2xl overflow-hidden transition-all ${expanded ? "border-violet-200 shadow-sm" : "border-gray-100 hover:border-gray-200"}`}>
+      <div className="flex items-center gap-3 px-5 py-4 cursor-pointer" onClick={handleToggle}>
+        {expanded ? <ChevronDown className="w-4 h-4 text-violet-500 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+          r.request_type === "CHANGE" ? "bg-orange-50 text-orange-600 border border-orange-100" : "bg-violet-50 text-violet-600 border border-violet-100"
+        }`}>{r.request_type}</span>
+        <span className="text-xs text-gray-600">{r.source_email}</span>
+        {parsed.client_name ? <span className="text-xs font-semibold text-gray-900">{String(parsed.client_name)}</span> : null}
+        {isReplace && (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">Replace</span>
+        )}
+        <span className="text-xs text-gray-400 ml-auto">{r.received_at ? new Date(r.received_at).toLocaleDateString() : "—"}</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">{r.status}</span>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-gray-100">
+          {/* Parsed details */}
+          {r.parsed_json && (
+            <div className="px-5 py-3">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                {Object.entries(r.parsed_json).filter(([k]) => k !== "change_details").map(([k, v]) => (
+                  <div key={k} className="flex items-center gap-2">
+                    <span className="text-gray-400 font-medium min-w-[120px]">{k.replace(/_/g, " ")}</span>
+                    <span className="text-gray-700 font-medium truncate">{String(v ?? "—")}</span>
+                  </div>
+                ))}
+              </div>
+              {parsed.change_details ? (
+                <p className="text-xs text-gray-600 mt-3 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100 leading-relaxed">
+                  {String(parsed.change_details)}
+                </p>
+              ) : null}
+            </div>
+          )}
+
+          {/* Recommendation panel */}
+          {isReplace && (
+            <div className="px-5 pb-5 pt-2">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="w-3.5 h-3.5 text-violet-500" />
+                <span className="text-xs font-semibold text-gray-900">AI Recommendations</span>
+                {recEntry?.coe && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{recEntry.coe}</span>}
+              </div>
+
+              {!recEntry || recEntry.status === "loading" ? (
+                <div className="flex items-center gap-3 py-8 justify-center text-gray-400">
+                  <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
+                  <span className="text-sm font-medium">Scoring candidates…</span>
+                </div>
+              ) : recEntry.status === "error" ? (
+                <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-50 border border-red-100">
+                  <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-red-800">Could not load recommendations</p>
+                    <button onClick={() => { loadedRef.current = false; loadRecommendation(); }}
+                      className="text-xs text-red-600 hover:text-red-800 font-medium mt-1 flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3" /> Retry
+                    </button>
+                  </div>
+                </div>
+              ) : recEntry.data ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span className="flex items-center gap-1.5" style={{ color: "#19105B" }}>
+                      <CheckCircle2 className="w-3.5 h-3.5" /><span className="font-semibold">{recEntry.data.available.length}</span> available
+                    </span>
+                    <span className="flex items-center gap-1.5" style={{ color: "#FF6196" }}>
+                      <Sparkles className="w-3.5 h-3.5" /><span className="font-semibold">{recEntry.data.best_match.length}</span> best match
+                    </span>
+                    <span className="text-gray-300">|</span>
+                    <span>{recEntry.data.total_evaluated} evaluated</span>
+                  </div>
+
+                  {recEntry.data.available.length > 0 && (
+                    <section className="space-y-2">
+                      <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "#19105B" }}>
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Available ({recEntry.data.available.length})
+                      </p>
+                      {recEntry.data.available.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="Available" />)}
+                    </section>
+                  )}
+
+                  {recEntry.data.best_match.length > 0 && (
+                    <section className="space-y-2">
+                      <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "#FF6196" }}>
+                        <Sparkles className="w-3.5 h-3.5" /> Best Match ({recEntry.data.best_match.length})
+                      </p>
+                      {recEntry.data.best_match.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="BestMatch" />)}
+                    </section>
+                  )}
+
+                  {recEntry.data.no_resource && (
+                    <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-100">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-semibold text-amber-900">No Resource — Hire Signal</p>
+                        <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">{recEntry.data.hire_signal}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChangesView() {
   const { data: requests = [], isLoading } = useRmgEmailRequests();
   const queryClient = useQueryClient();
@@ -1060,24 +1214,8 @@ function ChangesView() {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {changes.map(r => (
-            <div key={r.id} className="border border-gray-100 rounded-xl p-4 text-xs space-y-2 hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3">
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  r.request_type === "CHANGE" ? "bg-orange-50 text-orange-600 border border-orange-100" : "bg-violet-50 text-violet-600 border border-violet-100"
-                }`}>{r.request_type}</span>
-                <span className="text-gray-600">{r.source_email}</span>
-                <span className="text-gray-400 ml-auto">{r.received_at ? new Date(r.received_at).toLocaleDateString() : "—"}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">{r.status}</span>
-              </div>
-              {r.parsed_json && (
-                <pre className="text-[10px] text-gray-500 bg-gray-50 rounded-xl px-3 py-2 overflow-x-auto font-mono leading-relaxed border border-gray-100">
-                  {JSON.stringify(r.parsed_json, null, 2)}
-                </pre>
-              )}
-            </div>
-          ))}
+        <div className="space-y-3">
+          {changes.map(r => <ChangeRequestCard key={r.id} r={r} />)}
         </div>
       )}
     </div>

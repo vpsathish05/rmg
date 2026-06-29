@@ -7,7 +7,7 @@ AI-powered Resource Management System for JMan Group. Replaces manual email-base
 - UC1: RMG Engine — 3-tab view (Pipeline → Extensions → Changes) with AI-powered recommendation per role
   - Pipeline: new demand from pipeline_requests, AI scores candidates per open role
   - Extensions: auto-detected resource gaps (alloc_end < project_end) + AI replacement recommendations
-  - Changes: email-parsed change/new requests
+  - Changes: email PDF form → AI parse (pdfplumber + GPT-4o) → auto-route (NEW→Pipeline, EXTEND→Extensions, CHANGE→Changes). "Process Emails" button triggers manual fetch.
 - UC2: Demand Forecasting — pipeline requests with 6-month outlook, weighted FTE, capacity gap, revenue at risk, hot deals
 - UC3: Availability Dashboard — employee allocation status with billability tracking, charts (utilization donut, RAG, demand vs supply, COE distribution)
 - UC4: Project Health — RAG from WSR data, overrunning & ramp-down detection
@@ -90,6 +90,7 @@ rmg/
 │   │   │   ├── dashboard.py      ← Summary aggregation
 │   │   │   ├── webhooks.py       ← Graph email notifications
 │   │   │   ├── resource_map.py   ← Network graph + timeline endpoints
+│   │   │   ├── chat.py           ← GPT-4o chatbot with function calling
 │   │   │   ├── allocations.py    ← Allocation CRUD
 │   │   │   └── health.py         ← Health check
 │   │   ├── schemas/              ← Pydantic request/response
@@ -139,6 +140,7 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 | `/api/forecast` | forecast.py | Pipeline + outlook + insights (funnel, capacity gap, revenue, hot deals) |
 | `/api/rmg/*` | rmg_engine.py | Pipeline, extensions, extensions/needs, recommend, KB, cache, auto-coe |
 | `/api/resource-map` | resource_map.py | Network graph, project timeline, employee timeline, employee search |
+| `/api/chat` | chat.py | GPT-4o chatbot with function calling (7 tools) |
 | `/api/webhooks/email` | webhooks.py | Graph notifications + process-latest (manual trigger) |
 
 ## Database: 14 Tables (Azure PostgreSQL)
@@ -162,6 +164,7 @@ Key patterns:
 | Hire signal | gpt-4o | Actionable hiring profile | no_resource roles only |
 | KB proof | text-embedding-3-small | Past project evidence via cosine search | Top 6 per role |
 | Email/PDF parsing | gpt-4o | Structured extraction from emails + PDF attachments (pdfplumber) | Per email |
+| Chatbot | gpt-4o (function calling) | Natural language queries → tool execution → formatted answers | Per user message |
 
 ## Email (ACS)
 - Send via Azure Communication Services Email SDK (`azure-communication-email`)
@@ -172,6 +175,12 @@ Key patterns:
 - Email request routing: NEW → pipeline_requests, EXTEND/CHANGE → email_requests
 - PDF form: docs/change-request-form/RMG_Request_Form.html (unified form for all 3 types)
 - Graph permissions required: Mail.Read, Mail.Send (Application, admin-consented)
+
+## Chatbot
+- POST /api/chat — GPT-4o with function calling
+- 7 tools: search_available, get_employee_info, get_dashboard_stats, get_capacity_gap, get_project_team, get_project_health, recommend_for_role
+- Frontend: floating ChatPanel component in app layout (bottom-right)
+- Supports markdown tables (react-markdown + remark-gfm)
 
 ## Conventions
 - Backend: one router file per domain in `backend/app/routers/`

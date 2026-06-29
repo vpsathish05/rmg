@@ -63,7 +63,7 @@ async def get_message(
     async with httpx.AsyncClient() as c:
         r = await c.get(
             f"{_GRAPH}/users/{mailbox}/messages/{message_id}"
-            "?$select=subject,from,receivedDateTime,body",
+            "?$select=subject,from,receivedDateTime,body,hasAttachments",
             headers={"Authorization": f"Bearer {token}"},
         )
         r.raise_for_status()
