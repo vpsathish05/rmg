@@ -1,4 +1,4 @@
-"""Master ETL runner — loads all 7 source files into Neon.
+"""Master ETL runner - loads all 7 source files into Neon.
 
 Usage (from backend/ with venv active):
     python -m etl.load_all
@@ -44,7 +44,7 @@ FILES = {
 def main():
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
-        sys.exit("ERROR: DATABASE_URL not set — create backend/.env from .env.example")
+        sys.exit("ERROR: DATABASE_URL not set - create backend/.env from .env.example")
 
     print("Connecting to Neon …")
     conn = psycopg2.connect(db_url)
@@ -72,7 +72,7 @@ def main():
             print(f"{count:,} rows  ({elapsed:.1f}s)")
             results[name] = count
         except Exception as exc:
-            print(f"FAILED — {exc}")
+            print(f"FAILED - {exc}")
             conn.rollback()
             results[name] = f"ERROR: {exc}"
 

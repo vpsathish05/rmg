@@ -1,4 +1,4 @@
-# RMG — AI-Powered Resource Management
+# RMG - AI-Powered Resource Management
 
 Resource Management System for JMan Group. Replaces manual email-based resource negotiation with AI-powered candidate recommendations.
 

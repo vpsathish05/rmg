@@ -4,7 +4,7 @@ import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "RMG Resource Management",
-  description: "JMan Group Resource Management System",
+  description: "Jman Group Resource Management System",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

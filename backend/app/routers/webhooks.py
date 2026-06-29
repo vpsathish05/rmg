@@ -1,5 +1,5 @@
 """
-Microsoft Graph webhook — receives real-time email notifications.
+Microsoft Graph webhook - receives real-time email notifications.
 
 Graph first sends a GET with ?validationToken= to verify the endpoint.
 Then sends POST notifications when new emails arrive.
@@ -80,7 +80,7 @@ async def _process_notification(message_id: str, db: Session) -> None:
 
     # Skip if parsed data has no meaningful content (blank form)
     if parsed and not any(parsed.get(k) for k in ("client_name", "role", "employee_name", "project_id", "project_code")):
-        log.info("Skipping %s — no meaningful data extracted (blank form?)", message_id)
+        log.info("Skipping %s - no meaningful data extracted (blank form?)", message_id)
         return
 
     # Store in email_requests
@@ -104,6 +104,20 @@ async def _process_notification(message_id: str, db: Session) -> None:
     # Route NEW requests to pipeline_requests
     if status == "PARSED" and request_type == "NEW" and parsed:
         _route_new_to_pipeline(db, parsed, sender)
+
+    # Auto-reply with AI recommendations for EXTEND requests
+    if status == "PARSED" and request_type == "EXTEND" and parsed and sender:
+        try:
+            from app.services.auto_reply import auto_reply_recommendation
+            # Get the email_request ID we just inserted
+            row = db.execute(
+                text("SELECT id FROM email_requests WHERE outlook_message_id = :mid"),
+                {"mid": message_id},
+            ).fetchone()
+            if row:
+                await auto_reply_recommendation(db, str(row.id), parsed, sender)
+        except Exception as e:
+            log.warning("Auto-reply failed for %s: %s", message_id, e)
 
     log.info("Stored email request %s (type=%s, pdf=%s)", message_id, request_type, bool(pdf_text))
 

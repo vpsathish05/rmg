@@ -108,7 +108,7 @@ async def recommend(
     if no_resource:
         hire_signal = (
             f"No suitable internal candidate found for role '{req.role_code}' in {req.coe}. "
-            f"{len(scored)} employees evaluated — all are at capacity or lack verified {req.coe} skills. "
+            f"{len(scored)} employees evaluated - all are at capacity or lack verified {req.coe} skills. "
             f"Consider external hire or redeployment from an adjacent COE."
         )
 

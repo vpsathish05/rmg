@@ -1,5 +1,5 @@
 """
-Build Knowledge Base — embed all projects into project_embeddings.
+Build Knowledge Base - embed all projects into project_embeddings.
 
 Run: PYTHONPATH=. python -m etl.build_kb
 """

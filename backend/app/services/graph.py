@@ -1,4 +1,4 @@
-"""Microsoft Graph API client — email subscription + message fetch."""
+"""Microsoft Graph API client - email subscription + message fetch."""
 from __future__ import annotations
 import httpx
 from datetime import datetime, timedelta, timezone

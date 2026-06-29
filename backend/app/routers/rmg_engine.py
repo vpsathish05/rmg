@@ -1,13 +1,13 @@
 """
-RMG Engine API — powers the main 3-panel screen.
+RMG Engine API - powers the main 3-panel screen.
 
 Endpoints:
-  GET  /api/rmg/pipeline          — upcoming projects grouped by client (with roles)
-  GET  /api/rmg/extensions        — projects with allocations extended beyond end date
-  GET  /api/rmg/email-requests    — email_requests (EXTEND + CHANGE) for Cards 2 & 3
-  POST /api/rmg/recommend-role    — inline recommendation for a specific pipeline role
-  POST /api/rmg/kb/build          — trigger KB (re)build
-  GET  /api/rmg/kb/status         — KB stats
+  GET  /api/rmg/pipeline          - upcoming projects grouped by client (with roles)
+  GET  /api/rmg/extensions        - projects with allocations extended beyond end date
+  GET  /api/rmg/email-requests    - email_requests (EXTEND + CHANGE) for Cards 2 & 3
+  POST /api/rmg/recommend-role    - inline recommendation for a specific pipeline role
+  POST /api/rmg/kb/build          - trigger KB (re)build
+  GET  /api/rmg/kb/status         - KB stats
 """
 from __future__ import annotations
 import asyncio
@@ -17,6 +17,7 @@ from sqlalchemy import text
 from pydantic import BaseModel
 
 from app.database import get_db
+from app.config import settings
 from app.services import scorer as scoring_svc
 from app.services.llm import generate_rationales_batch
 from app.services.kb import search_employee_proofs, compute_semantic_skill_scores
@@ -28,7 +29,7 @@ _PRIORITY_ORDER = {"Gold": 0, "Silver": 1, "Bronze": 2, "Other": 3}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Card 1 — Upcoming Projects
+# Card 1 - Upcoming Projects
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/pipeline")
@@ -88,7 +89,7 @@ def get_pipeline(db: Session = Depends(get_db)):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Card 2 — Extensions
+# Card 2 - Extensions
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/extensions")
@@ -154,7 +155,7 @@ def get_extensions(db: Session = Depends(get_db)):
 
 @router.get("/extensions/needs")
 def get_extension_needs(db: Session = Depends(get_db)):
-    """Projects where resources are ending before the project ends — need replacements."""
+    """Projects where resources are ending before the project ends - need replacements."""
     rows = db.execute(text("""
         SELECT
             p.project_id, p.client_id, p.proposition_coe,
@@ -205,7 +206,7 @@ def get_extension_needs(db: Session = Depends(get_db)):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Card 3 — Change Requests
+# Card 3 - Change Requests
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/email-requests")
@@ -349,7 +350,7 @@ async def recommend_for_role(
 
 @router.post("/kb/build")
 async def build_kb(db: Session = Depends(get_db)):
-    """Trigger KB rebuild — embeds all projects. Takes 2-5 minutes."""
+    """Trigger KB rebuild - embeds all projects. Takes 2-5 minutes."""
     from app.services.kb import build_all
     n = await build_all(db)
     return {"message": f"KB built: {n} project embeddings created."}
@@ -507,11 +508,11 @@ async def _run_compute_bg():
 async def refresh_recommendations(background_tasks: BackgroundTasks):
     """
     Trigger a full re-compute of all Not Resourced role recommendations.
-    Returns immediately — compute runs in the background (~5–10 min).
+    Returns immediately - compute runs in the background (~5–10 min).
     """
     from app.services import rec_cache as rc
     if rc.is_running():
-        return {"message": "A compute is already in progress — please wait."}
+        return {"message": "A compute is already in progress - please wait."}
     background_tasks.add_task(_run_compute_bg)
     return {"message": "Recommendation refresh started. Check /api/rmg/recommendations/status for progress."}
 
@@ -523,8 +524,9 @@ async def refresh_recommendations(background_tasks: BackgroundTasks):
 
 class SendRecommendationRequest(BaseModel):
     client_name: str
-    to_email: str
-    roles: list[dict]  # [{role_code, candidates: [{employee_id, job_name, score, category}]}]
+    to_emails: list[str] = []      # one or more recipients - all editable on the frontend
+    to_email: str | None = None    # legacy single-recipient field - kept for backwards compat
+    roles: list[dict] = []         # [{role_code, candidates: [{employee_id, job_name, score, category}]}]
 
 
 @router.post("/send-recommendation")
@@ -532,6 +534,15 @@ async def send_recommendation(req: SendRecommendationRequest):
     """Send resource recommendation email via Azure Communication Services."""
     from app.config import settings
     from fastapi.responses import JSONResponse
+
+    # Accept both to_emails (list) and legacy to_email (single string)
+    raw = list(req.to_emails) if req.to_emails else []
+    if req.to_email and req.to_email.strip():
+        raw.append(req.to_email.strip())
+    valid_emails = [e.strip() for e in raw if e.strip()]
+
+    if not valid_emails:
+        return JSONResponse(status_code=422, content={"status": "error", "message": "At least one recipient email is required."})
 
     if not settings.acs_connection_string:
         return JSONResponse(status_code=502, content={"status": "error", "message": "Email not configured (ACS connection string missing)"})
@@ -570,7 +581,7 @@ async def send_recommendation(req: SendRecommendationRequest):
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
         <div style="background:#19105B;padding:20px 24px;border-radius:12px 12px 0 0">
             <h1 style="margin:0;color:#fff;font-size:18px">Resource Recommendation</h1>
-            <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px">RMG Engine · JMan Group</p>
+            <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px">RMG Engine · Jman Group</p>
         </div>
         <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
             <p style="font-size:14px;color:#374151;margin:0 0 16px">
@@ -579,7 +590,7 @@ async def send_recommendation(req: SendRecommendationRequest):
             </p>
             {roles_html}
             <p style="font-size:12px;color:#9ca3af;margin:16px 0 0;border-top:1px solid #f1f1f1;padding-top:12px">
-                Scored by RMG AI Engine — skill match, availability, competency &amp; productivity.
+                Scored by RMG AI Engine - skill match, availability, competency &amp; productivity.
                 Please reach out to discuss allocation.
             </p>
         </div>
@@ -590,17 +601,379 @@ async def send_recommendation(req: SendRecommendationRequest):
         client = EmailClient.from_connection_string(settings.acs_connection_string)
         message = {
             "senderAddress": settings.acs_sender_email,
-            "recipients": {"to": [{"address": req.to_email}]},
+            "recipients": {
+                "to": [{"address": e} for e in valid_emails]
+            },
             "content": {
-                "subject": f"Resource Recommendation — {req.client_name}",
+                "subject": f"Resource Recommendation - {req.client_name}",
                 "html": body_html,
             },
         }
         poller = client.begin_send(message)
         poller.result()
-        return {"status": "sent", "message": f"Recommendation sent to {req.to_email}"}
+        recipients_str = ", ".join(valid_emails)
+        return {"status": "sent", "message": f"Recommendation sent to {recipients_str}"}
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"ACS send_email failed: {e}")
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=502, content={"status": "error", "message": str(e)})
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Extension Conflicts — Detect scheduling conflicts from project extensions
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/extension-conflicts")
+def get_extension_conflicts(db: Session = Depends(get_db)):
+    """
+    Detect employees who have overlapping allocations due to project extensions.
+
+    A conflict occurs when:
+    - An employee has an existing BILLABLE allocation on a current project
+    - AND a PROPOSED or new BILLABLE allocation on a different project
+    - AND the two allocations overlap in time (current project was extended
+      past the new project's start date)
+
+    This catches the scenario where someone was proposed for a new project
+    because their current project was ending, but then the current project
+    got extended — creating a double-booking.
+    """
+    rows = db.execute(text("""
+        WITH current_allocs AS (
+            -- Active BILLABLE allocations on current projects (the "extended" side)
+            SELECT a.employee_id, a.project_id, a.allocation_pct,
+                   a.start_date, a.end_date, a.resourcing_status,
+                   p.client_id, p.project_end_date, p.proposition_coe
+            FROM allocations a
+            JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+            WHERE a.is_active_version = true
+              AND a.resourcing_status = 'BILLABLE'
+              AND a.end_date >= CURRENT_DATE
+              AND a.start_date <= CURRENT_DATE
+              AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+        ),
+        new_allocs AS (
+            -- Upcoming PROPOSED or BILLABLE allocations starting in next 30 days
+            SELECT a.employee_id, a.project_id, a.allocation_pct,
+                   a.start_date, a.end_date, a.resourcing_status,
+                   p.client_id, p.proposition_coe
+            FROM allocations a
+            JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+            WHERE a.is_active_version = true
+              AND a.resourcing_status IN ('PROPOSED', 'BILLABLE')
+              AND a.start_date > CURRENT_DATE
+              AND a.start_date <= CURRENT_DATE + INTERVAL '30 days'
+              AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+        )
+        SELECT
+            e.employee_id,
+            e.job_name,
+            e.canonical_role,
+            e.location,
+            e.department_name,
+            -- Current project (extended)
+            c.project_id AS current_project_id,
+            c.client_id AS current_client,
+            c.allocation_pct AS current_alloc_pct,
+            c.start_date AS current_start_date,
+            c.end_date AS current_alloc_end,
+            c.proposition_coe AS current_coe,
+            -- New project (proposed/planned)
+            n.project_id AS new_project_id,
+            n.client_id AS new_client,
+            n.allocation_pct AS new_alloc_pct,
+            n.start_date AS new_start_date,
+            n.end_date AS new_end_date,
+            n.resourcing_status AS new_status,
+            n.proposition_coe AS new_coe,
+            -- Conflict metrics
+            (c.end_date - n.start_date + 1) AS conflict_days,
+            (c.allocation_pct + n.allocation_pct) AS total_alloc_pct
+        FROM current_allocs c
+        JOIN new_allocs n ON n.employee_id = c.employee_id
+            AND n.project_id != c.project_id
+            AND n.start_date <= c.end_date  -- OVERLAP: new starts before current ends
+        JOIN employees e ON e.employee_id = c.employee_id AND e.is_active_version = true
+        ORDER BY (c.end_date - n.start_date + 1) DESC, e.job_name
+    """)).fetchall()
+
+    conflicts = []
+    for r in rows:
+        total_pct = float(r.total_alloc_pct or 0)
+        # Only flag as conflict if combined allocation > 100%
+        if total_pct > 100:
+            severity = "critical" if r.conflict_days > 14 else "high" if r.conflict_days > 7 else "medium"
+            conflicts.append({
+                "employee_id": r.employee_id,
+                "job_name": r.job_name,
+                "canonical_role": r.canonical_role,
+                "location": r.location,
+                "department": r.department_name,
+                # Current project
+                "current_project_id": r.current_project_id,
+                "current_client": r.current_client,
+                "current_alloc_pct": float(r.current_alloc_pct),
+                "current_start_date": r.current_start_date.isoformat() if r.current_start_date else None,
+                "current_alloc_end": r.current_alloc_end.isoformat() if r.current_alloc_end else None,
+                "current_coe": r.current_coe,
+                # New project
+                "new_project_id": r.new_project_id,
+                "new_client": r.new_client,
+                "new_alloc_pct": float(r.new_alloc_pct),
+                "new_start_date": r.new_start_date.isoformat() if r.new_start_date else None,
+                "new_end_date": r.new_end_date.isoformat() if r.new_end_date else None,
+                "new_status": r.new_status,
+                "new_coe": r.new_coe,
+                # Metrics
+                "conflict_days": int(r.conflict_days),
+                "total_alloc_pct": total_pct,
+                "severity": severity,
+            })
+
+    return {
+        "conflicts": conflicts,
+        "total": len(conflicts),
+        "critical": len([c for c in conflicts if c["severity"] == "critical"]),
+    }
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Extension Confirmations — Email callback + management
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/extension-response")
+def handle_extension_response(
+    token: str = Query(...),
+    response: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """
+    One-click callback from extension confirmation email.
+    EM clicks a button in the email → lands here.
+
+    response: 'no_extension' | 'extend' | 'partial'
+    """
+    from fastapi.responses import HTMLResponse
+
+    # Validate token
+    row = db.execute(text("""
+        SELECT id, project_id, client_id, project_end_date, headcount, team_summary, response AS existing_response
+        FROM extension_confirmations
+        WHERE token = :token
+    """), {"token": token}).fetchone()
+
+    if not row:
+        return HTMLResponse(content=_response_page("Invalid or expired link.", error=True), status_code=404)
+
+    if row.existing_response is not None:
+        return HTMLResponse(content=_response_page(
+            f"Already responded: <strong>{row.existing_response.replace('_', ' ').title()}</strong> for {row.client_id}.",
+            error=False
+        ))
+
+    valid_responses = ("no_extension", "extend", "partial")
+    if response not in valid_responses:
+        return HTMLResponse(content=_response_page(f"Invalid response: {response}", error=True), status_code=400)
+
+    # For 'partial' — redirect to partial selection page
+    if response == "partial":
+        # Get team members for this project
+        team_rows = db.execute(text("""
+            SELECT a.employee_id, e.job_name, e.canonical_role, a.allocation_pct
+            FROM allocations a
+            JOIN employees e ON e.employee_id = a.employee_id AND e.is_active_version = true
+            WHERE a.project_id = :pid AND a.is_active_version = true
+              AND a.resourcing_status = 'BILLABLE' AND a.end_date >= CURRENT_DATE
+            ORDER BY e.job_name
+        """), {"pid": row.project_id}).fetchall()
+
+        return HTMLResponse(content=_partial_selection_page(
+            token=token,
+            project_id=row.project_id,
+            client_id=row.client_id,
+            end_date=row.project_end_date,
+            team=[(r.employee_id, r.job_name, r.canonical_role, float(r.allocation_pct)) for r in team_rows],
+        ))
+
+    # Record response (no_extension or extend)
+    db.execute(text("""
+        UPDATE extension_confirmations
+        SET response = :response, responded_at = NOW()
+        WHERE token = :token
+    """), {"response": response, "token": token})
+    db.commit()
+
+    if response == "no_extension":
+        msg = f"✅ Confirmed: <strong>{row.client_id}</strong> will NOT be extended.<br>All {row.headcount} resources will become available for new projects."
+    else:
+        msg = f"✅ Confirmed: <strong>{row.client_id}</strong> will be extended.<br>All {row.headcount} resources are locked and will NOT be recommended elsewhere."
+
+    return HTMLResponse(content=_response_page(msg, error=False))
+
+
+class PartialResponseRequest(BaseModel):
+    token: str
+    staying_employee_ids: list[str] = []
+    new_end_date: str | None = None
+    notes: str | None = None
+
+
+@router.post("/extension-response/partial")
+def handle_partial_response(
+    req: PartialResponseRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Handle partial extension response — EM selects which employees stay.
+    Called from the partial selection page form.
+    """
+    from fastapi.responses import HTMLResponse
+
+    row = db.execute(text("""
+        SELECT id, project_id, client_id, headcount, response
+        FROM extension_confirmations
+        WHERE token = :token
+    """), {"token": req.token}).fetchone()
+
+    if not row:
+        return HTMLResponse(content=_response_page("Invalid or expired link.", error=True), status_code=404)
+
+    if row.response is not None:
+        return HTMLResponse(content=_response_page(
+            f"Already responded for {row.client_id}.", error=False
+        ))
+
+    # Record partial response
+    db.execute(text("""
+        UPDATE extension_confirmations
+        SET response = 'partial',
+            responded_at = NOW(),
+            staying_employee_ids = :staying,
+            new_end_date = :new_end,
+            notes = :notes
+        WHERE token = :token
+    """), {
+        "staying": req.staying_employee_ids if req.staying_employee_ids else None,
+        "new_end": req.new_end_date,
+        "notes": req.notes,
+        "token": req.token,
+    })
+    db.commit()
+
+    staying_count = len(req.staying_employee_ids)
+    leaving_count = (row.headcount or 0) - staying_count
+
+    msg = f"✅ Confirmed: <strong>{row.client_id}</strong> — Partial extension.<br>{staying_count} staying, {leaving_count} becoming available."
+
+    return HTMLResponse(content=_response_page(msg, error=False))
+
+
+@router.get("/extension-confirmations")
+def get_extension_confirmations(db: Session = Depends(get_db)):
+    """Get all extension confirmations for display in the UI."""
+    from app.services.extension_check import get_all_confirmations
+    return get_all_confirmations(db)
+
+
+@router.post("/extension-check/run")
+def trigger_extension_check(db: Session = Depends(get_db)):
+    """Manually trigger the extension check (sends emails for projects ending in 7 days)."""
+    from app.services.extension_check import check_and_send_all
+    result = check_and_send_all(db)
+    return result
+
+
+# ── HTML page builders for email callbacks ────────────────────────────────────
+
+def _response_page(message: str, error: bool = False) -> str:
+    """Simple HTML response page shown when EM clicks email button."""
+    color = "#dc2626" if error else "#19105B"
+    icon = "❌" if error else "✅"
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>SapienSync — Extension Response</title>
+<style>body{{font-family:Arial,sans-serif;margin:0;padding:40px;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f9fafb}}
+.card{{max-width:500px;background:white;border-radius:16px;padding:40px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.08)}}
+h1{{color:{color};font-size:20px;margin:0 0 16px}}
+p{{color:#374151;font-size:14px;line-height:1.6;margin:0}}
+.brand{{font-size:11px;color:#9ca3af;margin-top:24px}}</style></head>
+<body><div class="card">
+<h1>{icon} Extension Response</h1>
+<p>{message}</p>
+<p class="brand">SapienSync Engine · Jman Group</p>
+</div></body></html>"""
+
+
+def _partial_selection_page(token: str, project_id: str, client_id: str, end_date, team: list) -> str:
+    """HTML page with checkboxes for EM to select which team members stay."""
+    base_url = settings.webhook_base_url
+
+    team_rows = ""
+    for emp_id, name, role, pct in team:
+        team_rows += f"""
+        <label style="display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all 0.15s"
+               onmouseover="this.style.borderColor='#19105B'" onmouseout="this.style.borderColor='#e5e7eb'">
+            <input type="checkbox" name="staying" value="{emp_id}" style="width:18px;height:18px;accent-color:#19105B">
+            <div style="flex:1">
+                <span style="font-size:14px;font-weight:600;color:#19105B">{name}</span>
+                <span style="font-size:12px;color:#6b7280;margin-left:8px">{role} · {int(pct)}%</span>
+            </div>
+        </label>"""
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>SapienSync — Partial Extension</title>
+<style>body{{font-family:Arial,sans-serif;margin:0;padding:40px;background:#f9fafb;display:flex;justify-content:center}}
+.card{{max-width:600px;width:100%;background:white;border-radius:16px;padding:32px;box-shadow:0 4px 24px rgba(0,0,0,0.08)}}
+h1{{color:#19105B;font-size:20px;margin:0 0 4px}}
+.sub{{color:#6b7280;font-size:13px;margin:0 0 24px}}
+.btn{{display:inline-block;padding:12px 32px;background:#19105B;color:#fff;font-size:14px;font-weight:600;border:none;border-radius:10px;cursor:pointer;margin-top:16px}}
+.btn:hover{{background:#3411A3}}
+label:has(input:checked){{border-color:#19105B!important;background:#19105B08}}
+.field{{margin-top:16px}}
+.field label{{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px}}
+.field input{{width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;box-sizing:border-box}}
+.brand{{font-size:11px;color:#9ca3af;margin-top:24px;text-align:center}}</style></head>
+<body><div class="card">
+<h1>Partial Extension — {client_id}</h1>
+<p class="sub">Select which team members will STAY on the project (others will become available):</p>
+
+<form id="partialForm">
+    <input type="hidden" name="token" value="{token}">
+    {team_rows}
+
+    <div class="field">
+        <label>New estimated end date (optional)</label>
+        <input type="date" name="new_end_date" id="newEndDate">
+    </div>
+    <div class="field">
+        <label>Notes (optional)</label>
+        <input type="text" name="notes" id="notes" placeholder="e.g. Extension for 3 more months">
+    </div>
+
+    <button type="submit" class="btn">Confirm Partial Extension</button>
+</form>
+
+<p class="brand">SapienSync Engine · Jman Group</p>
+
+<script>
+document.getElementById('partialForm').addEventListener('submit', async function(e) {{
+    e.preventDefault();
+    const checked = Array.from(document.querySelectorAll('input[name="staying"]:checked')).map(cb => cb.value);
+    const body = {{
+        token: '{token}',
+        staying_employee_ids: checked,
+        new_end_date: document.getElementById('newEndDate').value || null,
+        notes: document.getElementById('notes').value || null,
+    }};
+    const res = await fetch('{base_url}/api/rmg/extension-response/partial', {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json'}},
+        body: JSON.stringify(body),
+    }});
+    const html = await res.text();
+    document.body.innerHTML = html;
+}});
+</script>
+</div></body></html>"""

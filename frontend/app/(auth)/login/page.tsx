@@ -23,13 +23,13 @@ export default function LoginPage() {
             >
               J
             </div>
-            <span className="font-bold text-xl" style={{ color: "#19105B" }}>RMG Engine</span>
+            <span className="font-bold text-xl" style={{ color: "#19105B" }}>SapienSync</span>
           </div>
-          <p className="text-[10px] font-medium tracking-widest uppercase" style={{ color: "#94A3B8" }}>JMan Group</p>
+          <p className="text-[10px] font-medium tracking-widest uppercase" style={{ color: "#94A3B8" }}>Jman Group</p>
         </div>
 
         <h2 className="text-xl font-semibold text-foreground mb-1">Sign in</h2>
-        <p className="text-sm text-muted-foreground mb-7">Enter your RMG credentials to continue.</p>
+        <p className="text-sm text-muted-foreground mb-7">Enter your SapienSync credentials to continue.</p>
 
         <form action={action} className="space-y-4">
           <div>
@@ -85,7 +85,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-xs text-muted-foreground text-center mt-8">
-          JMan Group · Resource Management Group
+          Jman Group · Resource Management Group
         </p>
       </div>
     </div>

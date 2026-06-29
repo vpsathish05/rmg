@@ -1,17 +1,17 @@
-# RMG — Architecture & Conventions
+# RMG - Architecture & Conventions
 
 ## Project Overview
 AI-powered Resource Management System for JMan Group. Replaces manual email-based resource negotiation.
 
 ### Use Cases
-- UC1: RMG Engine — 3-tab view (Pipeline → Extensions → Changes) with AI-powered recommendation per role
+- UC1: RMG Engine - 3-tab view (Pipeline → Extensions → Changes) with AI-powered recommendation per role
   - Pipeline: new demand from pipeline_requests, AI scores candidates per open role
   - Extensions: auto-detected resource gaps (alloc_end < project_end) + AI replacement recommendations
   - Changes: email PDF form → AI parse (PyPDF2 form fields + pdfplumber fallback + GPT-4o) → auto-route (NEW→Pipeline, EXTEND→Changes with AI recs, CHANGE→Changes). Accepts subjects "Resource Request" and "Extension Request". "Process Emails" button triggers manual fetch.
-- UC2: Demand Forecasting — pipeline requests with 6-month outlook, weighted FTE, capacity gap, revenue at risk, hot deals
-- UC3: Availability Dashboard — employee allocation status with billability tracking, charts (utilization donut, RAG, demand vs supply, COE distribution)
-- UC4: Project Health — RAG from WSR data, overrunning & ramp-down detection
-- UC5: Resource Map — network graph (projects connected by shared employees) + project/resource timeline (Gantt)
+- UC2: Demand Forecasting - 12-month ML forecast (revenue P10/P50/P90, cluster decomposition, resource FTE by role, project volume with seasonality, COE supply/demand gap) + pipeline insights (capacity gap, revenue at risk, hot deals)
+- UC3: Availability Dashboard - employee allocation status with billability tracking, charts (utilization donut, RAG, demand vs supply, COE distribution)
+- UC4: Project Health - RAG from WSR data (latest non-NO_COLOR entry), overrunning & ramp-down detection
+- UC5: Resource Map - network graph (projects connected by shared employees) + project/resource timeline (Gantt)
 
 ### Scoring Formula
 ```
@@ -19,13 +19,14 @@ With competency:    total = skill×0.40 + competency×0.25 + availability×0.25 
 Without competency: total = skill×0.65 + availability×0.25 + productivity×0.10
 
 skill_score = 0.5 × COE_skill_score + 0.5 × semantic_similarity (when embeddings available)
+avail_score = 1.0 if available >= requested_alloc_pct, else available / requested_alloc_pct
 ```
 Categories: Available (has capacity) → BestMatch (score ≥ 0.40, allocated) → Stretch (poor fit)
 
 ### AI Pipeline (per role recommendation)
 1. **COE Detection**: SQL role-based → SQL global fallback → GPT-4o inference
 2. **Skills Extraction**: LLM infers required skills when pipeline data has null/nan
-3. **Semantic Skill Match**: Embed role query → cosine similarity vs employee skill embeddings
+3. **Semantic Skill Match**: Embed role query → pgvector ANN index (top-K nearest) vs employee skill embeddings
 4. **Formula Scoring**: Weighted sum (skill + competency + availability + productivity)
 5. **Rationale Generation**: GPT-4o 2-3 sentence explanation per top 10 candidates
 6. **LLM Re-Ranking**: GPT-4o re-orders top 10 based on holistic fit
@@ -44,9 +45,10 @@ Categories: Available (has capacity) → BestMatch (score ≥ 0.40, allocated) �
 | Database | Azure PostgreSQL Flexible Server + pgvector | psycopg2-binary |
 | ORM | SQLAlchemy 2.x | ≥2.0.0 |
 | AI | OpenAI (gpt-4o + text-embedding-3-small 1536d) | ≥1.30.0 |
+| ML | statsmodels + scikit-learn | 0.14.6 / 1.9.0 |
 | Email | Azure Communication Services (azure-communication-email) | ≥1.0.0 |
 | Scheduling | APScheduler (AsyncIO) | ≥3.10.4 |
-| Auth | Custom JWT sessions (jose) — username/password | N/A |
+| Auth | Custom JWT sessions (jose) - username/password | N/A |
 
 ## Folder Structure
 ```
@@ -67,7 +69,7 @@ rmg/
 │   │       ├── resource-map/       ← Network graph + project/resource timelines
 │   │       └── recommend/          ← Manual recommendation form
 │   ├── components/
-│   │   ├── layout/sidebar.tsx      ← Navigation (Engine, Forecast, Resource Map, Dashboard)
+│   │   ├── layout/sidebar.tsx      ← Navigation (Dashboard, Engine, Forecast)
 │   │   └── ui/                     ← shadcn primitives
 │   └── lib/
 │       ├── api.ts                  ← Axios instance
@@ -97,8 +99,9 @@ rmg/
 │   │   └── services/
 │   │       ├── scorer.py         ← Core scoring engine (formula + semantic blend)
 │   │       ├── llm.py            ← GPT-4o: rationale, re-ranking, hire signals
-│   │       ├── kb.py             ← pgvector KB build + search + semantic skill scoring
+│   │       ├── kb.py             ← pgvector KB build + search + semantic skill scoring (ANN)
 │   │       ├── rec_cache.py      ← Nightly pre-compute (full AI pipeline)
+│   │       ├── auto_reply.py     ← Auto-reply: EXTEND emails → AI recommend → send via ACS
 │   │       ├── email_parser.py   ← GPT-4o email parsing
 │   │       └── graph.py          ← Microsoft Graph client
 │   ├── etl/
@@ -110,6 +113,21 @@ rmg/
 │   │   ├── build_kb.py                 ← Project embeddings rebuild
 │   │   ├── build_skill_embeddings.py   ← Employee skill profile embeddings
 │   │   └── compute_recommendations.py  ← Standalone rec compute
+│   ├── ml/
+│   │   ├── rate_card.py          ← Unified rate lookup (30 roles × 3 locations)
+│   │   ├── role_mapping.py       ← Pipeline code → role/location/COE (27 mappings)
+│   │   ├── proration.py          ← Monthly revenue spreading engine
+│   │   ├── pipeline_calc.py      ← Pipeline deals → prorated revenue by cluster/COE
+│   │   ├── data_prep.py          ← 30-month revenue reconstruction from allocations
+│   │   ├── train.py              ← Full training orchestrator (5.3s all models)
+│   │   ├── predict.py            ← CLI prediction generator (--horizon, --format)
+│   │   ├── evaluate.py           ← Backtest evaluation (MAPE, MAE)
+│   │   └── models/
+│   │       ├── revenue_forecast.py   ← Holt + headcount regression ensemble
+│   │       ├── cluster_model.py      ← 5-cluster weight decomposition
+│   │       ├── coe_gap_model.py      ← COE supply/demand + hiring recs
+│   │       ├── resource_forecast.py  ← FTE by role, 12-month
+│   │       └── project_forecast.py   ← Holt-Winters seasonal (90 months)
 │   └── requirements.txt
 └── docs/                          ← Source data (CSV, XLSX)
 ```
@@ -129,6 +147,9 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 ### Email Webhook: Graph POST → background: fetch message → GPT parse → INSERT email_requests
 ### Email Manual: POST /api/webhooks/email/process-latest → fetch latest emails → extract PDF → GPT parse → route (NEW→pipeline, EXTEND/CHANGE→email_requests)
 
+### ML Forecast: GET /api/forecast/ml/* → reconstruct_revenue (allocs × rate card) → Holt/regression ensemble → cluster weights → COE gap → JSON response
+### ML Training: PYTHONPATH=. python3 -m ml.train → all 5 models in 5.3s → cache to ml/_cache/
+
 ## API Routes
 | Prefix | Router | Purpose |
 |--------|--------|---------|
@@ -138,6 +159,7 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 | `/api/allocations` | allocations.py | Allocation CRUD |
 | `/api/recommend` | recommend.py | Manual recommendation |
 | `/api/forecast` | forecast.py | Pipeline + outlook + insights (funnel, capacity gap, revenue, hot deals) |
+| `/api/forecast/ml/*` | ml_forecast.py | ML 12-month forecast (revenue, clusters, projects, resources, COE gap, summary, actuals) |
 | `/api/rmg/*` | rmg_engine.py | Pipeline, extensions, extensions/needs, recommend, KB, cache, auto-coe |
 | `/api/resource-map` | resource_map.py | Network graph, project timeline, employee timeline, employee search |
 | `/api/chat` | chat.py | GPT-4o chatbot with function calling (7 tools) |
@@ -152,6 +174,10 @@ Key patterns:
 - `is_active_version = true` filter on most queries (soft-versioning)
 - `(end_date IS NULL OR end_date >= CURRENT_DATE)` for active allocations
 - `score > 0` filter for meaningful skill scores
+- BAU exclusion: `LOWER(p.type_of_project) != 'bau activity'` on ALL allocation queries (BAU is tracking overhead, not real work)
+- Project Health: uses latest WSR entry WHERE at least one status != 'NO_COLOR' (skips blank entries)
+- COE grouping: `LOWER(TRIM(coe))` for case-insensitive dedup
+- Dashboard KPIs and charts all have drill-down modals showing raw data + calculation explanation
 
 ## AI Integration Summary
 | Service | Model | Purpose | When |
@@ -165,45 +191,61 @@ Key patterns:
 | KB proof | text-embedding-3-small | Past project evidence via cosine search | Top 6 per role |
 | Email/PDF parsing | gpt-4o | Structured extraction from emails + PDF attachments (pdfplumber) | Per email |
 | Chatbot | gpt-4o (function calling) | Natural language queries → tool execution → formatted answers | Per user message |
+| Revenue forecast | statsmodels + sklearn | Holt + headcount regression ensemble (4.4% MAPE) | On-demand / weekly |
+| Project forecast | statsmodels | Holt-Winters seasonal (90 months training) | On-demand / weekly |
+| Resource forecast | statsmodels | Holt per role + pipeline demand overlay | On-demand / weekly |
+| Cluster model | numpy | Pipeline-derived weights with exponential decay blending | On-demand |
+| COE gap model | numpy | Dynamic supply projection + pipeline demand | On-demand |
 
 ## Email (ACS)
 - Send via Azure Communication Services Email SDK (`azure-communication-email`)
 - Connection string: `ACS_CONNECTION_STRING` env var
 - Sender: `DoNotReply@e3445e90-bf10-44d1-8ea3-32eb935710d6.azurecomm.net`
-- Used for: sending recommendation emails from RMG Engine pipeline
+- Used for: sending recommendation emails from RMG Engine pipeline + auto-reply for EXTEND requests
+- **Auto-Reply (EXTEND)**: When an EXTEND email is processed, the system automatically runs AI recommendation (scorer + semantic ANN + rationale) and sends a reply to the sender with top candidates. Status changes to `REPLIED`.
+- **Send Recommendation (multi-recipient)**: `POST /api/rmg/send-recommendation` accepts `to_emails: list[str]`. Legacy `to_email: str | None` also accepted and merged. Frontend pre-fills EM from `pipeline_requests.em_name`, all rows editable, add/remove recipients supported. Pydantic 422 errors handled gracefully on frontend.
 - Graph API still used for: webhook subscriptions + message fetch + PDF attachment extraction (inbound email parsing)
-- Email request routing: NEW → pipeline_requests, EXTEND/CHANGE → email_requests (Changes tab)
+- Email request routing: NEW → pipeline_requests, EXTEND → email_requests + auto-reply, CHANGE → email_requests (Changes tab)
 - EXTEND requests show AI replacement recommendations in Changes tab
 - PDF form: official JMan editable PDFs (Resourcing Form + Change Request Form), extracted via PyPDF2 form fields
 - Accepted email subjects: "Resource Request", "Extension Request"
 - Graph permissions required: Mail.Read, Mail.Send (Application, admin-consented)
+- email_requests.status: PENDING → PARSED → REPLIED (for EXTEND) or stays PARSED (for CHANGE/NEW)
 
 ## Chatbot
-- POST /api/chat — GPT-4o with function calling
+- POST /api/chat - GPT-4o with function calling
 - 7 tools: search_available, get_employee_info, get_dashboard_stats, get_capacity_gap, get_project_team, get_project_health, recommend_for_role
 - Frontend: floating ChatPanel component in app layout (bottom-right)
 - Supports markdown tables (react-markdown + remark-gfm)
 
 ## Conventions
 - Backend: one router file per domain in `backend/app/routers/`
-- Frontend: ALL API calls centralized in `lib/hooks.ts` — never call Axios from components
-- UI: JMan brand — primary #19105B (Midnight Blue), secondary #FF6196 (Rose), 75% white / 20% primary / 5% secondary, Arial font
-- Sidebar: 4 top-level routes — Engine, Forecast, Resource Map, Dashboard
-- Scoring categories: Available / BestMatch (≥0.40) / Stretch
+- Frontend: ALL API calls centralized in `lib/hooks.ts` - never call Axios from components
+- UI: JMan brand - primary #19105B (Midnight Blue), secondary #FF6196 (Rose), 75% white / 20% primary / 5% secondary, Arial font
+- Sidebar: 3 top-level routes - Dashboard, Engine, Forecast
+- Scoring categories: Available (free capacity ≥ requested) / BestMatch (score ≥ 0.40, allocated) / Stretch (poor fit)
 - Auth: custom JWT (jose), httpOnly cookie, 8h expiry
 - Layered: Routers (thin) → Services (logic) → Database
-- Batch SQL in scorer (5 queries then in-memory scoring — avoids complex joins)
+- Batch SQL in scorer (5 queries then in-memory scoring - avoids complex joins)
 - Parallel AI: asyncio.gather() for rationale + KB lookups
 - Never commit .env files
+- API error handling: always handle both `{message}` (custom) and `{detail}` (Pydantic 422) shapes in frontend catch blocks
+- Pydantic models: use default values (`= []`, `= None`) on optional list/object fields to avoid Pydantic 422 on partial payloads
 
 ## Critical Files
 | File | Role |
 |------|------|
-| `backend/app/services/scorer.py` | Core scoring formula + semantic blend + categorization |
-| `backend/app/services/rec_cache.py` | Nightly AI orchestrator (all 8 steps) |
+| `backend/app/services/scorer.py` | Core scoring formula + semantic blend + relative avail scoring |
+| `backend/app/services/rec_cache.py` | Nightly AI orchestrator (all 8 steps, uses ANN) |
 | `backend/app/services/llm.py` | All GPT-4o calls: rationale, rerank, hire signal |
-| `backend/app/services/kb.py` | pgvector build + search + semantic skill scoring |
-| `backend/app/routers/rmg_engine.py` | Largest router — main operational screen |
+| `backend/app/services/kb.py` | pgvector build + search + semantic skill scoring (ANN + full) |
+| `backend/app/services/auto_reply.py` | Auto-reply for EXTEND emails: recommend + build HTML + send ACS |
+| `backend/app/routers/rmg_engine.py` | Largest router - main operational screen |
+| `backend/app/routers/ml_forecast.py` | ML forecast API (7 endpoints) |
+| `backend/ml/models/revenue_forecast.py` | Revenue ensemble model (Holt + regression) |
+| `backend/ml/data_prep.py` | Historical revenue reconstruction from allocations |
+| `backend/ml/rate_card.py` | Rate card parser (30 roles × 3 locations from XLSX) |
+| `backend/ml/train.py` | ML training orchestrator (all 5 models, 5.3s) |
 | `backend/etl/schema.sql` | Schema source of truth |
 | `backend/etl/build_skill_embeddings.py` | Employee skill embedding ETL |
 | `frontend/lib/hooks.ts` | All TS interfaces + query hooks (API contract) |
@@ -245,3 +287,60 @@ python -m etl.build_skill_embeddings
 # Compute all recommendations (full AI pipeline)
 python -m etl.compute_recommendations
 ```
+
+## ML Forecast Commands
+```bash
+cd backend && source .venv/bin/activate
+
+# Train all 5 models (5.3s)
+PYTHONPATH=. python3 -m ml.train
+
+# Generate predictions (table or JSON)
+PYTHONPATH=. python3 -m ml.predict --horizon 12 --format table
+
+# Backtest evaluation (4.4% MAPE revenue)
+PYTHONPATH=. python3 -m ml.evaluate
+```
+
+### ML Model Details
+| Model | Method | Training Data | Key Output |
+|-------|--------|---------------|-----------|
+| Revenue | Holt Damped + Headcount Regression (60/40 ensemble) | 30 months calibrated | $59.4M/year, +71% YoY |
+| Cluster | Pipeline-derived weights + exponential decay | Current pipeline (229 deals) | 5 clusters, C5=34.7% |
+| Project | Holt-Winters additive (period=12) | 90 months | 430/year, seasonal |
+| Resource | Holt per role + pipeline overlay | 18 months FTE by role | 420 FTE/mo, hiring gaps |
+| COE Gap | Supply projection + pipeline demand | Skills + allocations | 21 hires needed |
+
+Rate cards sourced from: `docs/pricing/2511_JMAN Pricing Tool (aligned with new JIN).xlsx` + `docs/pricing/Cluster_Revenue_COE_Forecast.xlsx`
+
+
+## Scoring Engine - Known Limitations & Backlog
+These are identified issues not yet fixed - do not re-implement differently without checking this list:
+
+| # | Severity | File | Issue | Fix |
+|---|---|---|---|---|
+| 1 | Critical | `rmg_engine.py` | Inline recommend uses `compute_semantic_skill_scores` (full scan) instead of ANN | Replace with `compute_semantic_skill_scores_ann(top_k=100)` - 3 lines |
+| 2 | Critical | `scorer.py` | Competency data only for 3 roles (Solutions Enabler, Solutions Consultant, Senior SSE) | Collect comp data for all roles OR add skill-proxy: `comp_score = skill_score * 0.80` for unassessed |
+| 3 | High | `scorer.py` | `SKILL_NEUTRAL = 0.15` arbitrary - barely distinguishes "assessed elsewhere" from "never assessed" | Raise to 0.25 or implement cross-COE transferability score |
+| 4 | High | `scorer.py` | Bench employees get `prod_score = 0` (no hours) - penalised for being available | Set `prod_score = 0.5` neutral when `available >= requested_alloc_pct` |
+| 5 | High | `scorer.py` | Skill normalisation `/5.0` and comp `/4.0` not validated against data | Add `min(1.0, ...)` guard |
+| 6 | Medium | `scorer.py` | Availability check uses `CURRENT_DATE`, not `likely_start_date` | Pass `start_date` param into `score_all()`, filter allocations at that date |
+| 7 | Medium | `kb.py` | KB proof has no similarity threshold - shows any result | Add `>= 0.35` threshold in `search_employee_proofs` WHERE clause |
+| 8 | Medium | `kb.py` | ANN `top_k=50` too small as team grows past 500 | Raise to 100 or make dynamic: `min(150, int(total_employees * 0.15))` |
+| 9 | Low | `rec_cache.py` | Full recompute every night - no delta detection | Add `updated_at` to `pipeline_requests`, skip unchanged roles |
+| 10 | Low | `auto_reply.py` | EXTEND auto-reply generates rationale for only 1st candidate | Run rationale for all 3 with `asyncio.gather` |
+
+## Session Log
+
+### July 2026 - Session 1
+**Send Recommendation multi-recipient**
+- `SendRecommendationRequest`: `to_email: str` → `to_emails: list[str] = []` + `to_email: str | None = None` (legacy compat)
+- Validation merges both fields; rejects if no valid emails
+- ACS recipients: `[{"address": e} for e in valid_emails]`
+- Frontend `SendRecommendationBtn` rewritten: `emails: string[]` state, pre-fills EM from `project.em_name`, every row editable, add/remove, Enter adds row, send button shows count
+- Frontend catch block handles both `{message}` and `{detail[].msg}` error shapes
+- Files changed: `backend/app/routers/rmg_engine.py`, `frontend/app/(app)/rmg-engine/page.tsx`
+
+**Forecast page - fully documented**
+- All 5 ML cards explained: models used, P10/P50/P90 logic, MAPE
+- HTML explainer created: `docs/forecast-ml-explainer.html` (JMAN brand styled)

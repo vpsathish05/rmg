@@ -6,6 +6,19 @@ from app.models.pipeline import PipelineRequest
 
 router = APIRouter()
 
+# The allocations table is populated in ~weekly segments per project, so a person's
+# current-week row can lag several days-to-weeks behind reality even after it starts.
+# Approved timesheet hours are the ground truth for "are they actually working right
+# now" - mirrors app/routers/dashboard.py's _RECENT_REAL_WORK.
+_RECENT_REAL_WORK = """EXISTS (
+        SELECT 1 FROM timesheets t
+        JOIN projects tp ON tp.project_id = t.project_id AND tp.is_active_version = true
+        WHERE t.employee_id = e.employee_id
+          AND t.date >= CURRENT_DATE - INTERVAL '30 days'
+          AND t.status = 'APPROVED'
+          AND LOWER(COALESCE(tp.type_of_project, '')) IN ('client project', 'managed services')
+    )"""
+
 
 @router.get("")
 def list_pipeline(db: Session = Depends(get_db)):
@@ -53,8 +66,10 @@ def pipeline_outlook(db: Session = Depends(get_db)):
 
 
 
-# Average billing rate assumption (USD per FTE per month)
-_BILLING_RATE_MONTHLY = 12000
+# Average billing rate assumption (GBP per FTE per month)
+# Source figure is $12,000 USD/month, converted at the rate card's FX_GBP_TO_USD (1.3)
+from ml.rate_card import FX_GBP_TO_USD
+_BILLING_RATE_MONTHLY = round(12000 / FX_GBP_TO_USD, 2)
 
 
 @router.get("/insights")
@@ -90,16 +105,20 @@ def forecast_insights(db: Session = Depends(get_db)):
         GROUP BY role ORDER BY demand_fte DESC LIMIT 8
     """)).fetchall()
 
-    bench_rows = db.execute(text("""
+    bench_rows = db.execute(text(f"""
         SELECT e.canonical_role AS role, COUNT(*) AS bench
         FROM employees e
-        LEFT JOIN allocations a ON a.employee_id = e.employee_id
-          AND a.is_active = true AND a.is_active_version = true
-          AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         WHERE e.account_status = true AND e.is_active_version = true
           AND e.date_of_resignation IS NULL AND e.canonical_role IS NOT NULL
+          AND COALESCE((
+              SELECT SUM(a.allocation_pct) FROM allocations a
+              JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+              WHERE a.employee_id = e.employee_id AND a.is_active_version = true
+                AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+          ), 0) = 0
+          AND NOT {_RECENT_REAL_WORK}
         GROUP BY e.canonical_role
-        HAVING COALESCE(SUM(a.allocation_pct), 0) = 0
     """)).fetchall()
     bench_map = {r.role: int(r.bench) for r in bench_rows}
 
@@ -133,17 +152,25 @@ def forecast_insights(db: Session = Depends(get_db)):
           AND probability_weight >= 0.7
           AND likely_start_date IS NOT NULL
           AND likely_start_date <= CURRENT_DATE + INTERVAL '3 months'
-        ORDER BY likely_start_date, probability_weight DESC
-        LIMIT 12
+        ORDER BY client_name, likely_start_date, probability_weight DESC
     """)).fetchall()
-    hot_deals = [{
-        "client": r.client_name,
-        "role": r.role_code_raw,
-        "probability": float(r.probability_weight) if r.probability_weight else None,
-        "start_date": r.likely_start_date.isoformat() if r.likely_start_date else None,
-        "duration_weeks": r.duration_weeks,
-        "allocation_pct": float(r.allocation_pct) if r.allocation_pct else 100,
-    } for r in hot_rows]
+    # Group by client
+    hot_deals_grouped: dict = {}
+    for r in hot_rows:
+        client = r.client_name or "Unknown"
+        if client not in hot_deals_grouped:
+            hot_deals_grouped[client] = {
+                "client": client,
+                "probability": float(r.probability_weight) if r.probability_weight else None,
+                "start_date": r.likely_start_date.isoformat() if r.likely_start_date else None,
+                "roles": [],
+            }
+        hot_deals_grouped[client]["roles"].append({
+            "role": r.role_code_raw,
+            "duration_weeks": r.duration_weeks,
+            "allocation_pct": float(r.allocation_pct) if r.allocation_pct else 100,
+        })
+    hot_deals = list(hot_deals_grouped.values())
 
     # 5. Smart alerts
     alerts = []
@@ -164,7 +191,7 @@ def forecast_insights(db: Session = Depends(get_db)):
 
     # Alert: revenue at risk
     if revenue_at_risk > 50000:
-        alerts.append({"type": "revenue", "message": f"${revenue_at_risk:,.0f} potential revenue at risk from unresourced roles"})
+        alerts.append({"type": "revenue", "message": f"£{revenue_at_risk:,.0f} potential revenue at risk from unresourced roles"})
 
     return {
         "funnel": funnel,

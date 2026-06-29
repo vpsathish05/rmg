@@ -4,18 +4,18 @@ import json
 from openai import AsyncOpenAI
 from app.config import settings
 
-_SYSTEM = """You are the RMG (Resource Management Group) assistant at JMan Group.
-Parse the content from a filled PDF form or email body and extract structured data. Return ONLY valid JSON — no commentary.
+_SYSTEM = """You are the RMG (Resource Management Group) assistant at Jman Group.
+Parse the content from a filled PDF form or email body and extract structured data. Return ONLY valid JSON - no commentary.
 
 There are TWO form formats:
 
-FORM 1 — Resourcing Request Form (new resource needs):
+FORM 1 - Resourcing Request Form (new resource needs):
 - Section 1: Request Type, Urgency, Date of Request
 - Section 2: Project Code, Project Name, Client Name, Cluster, COE, Engagement Type, Phase
 - Section 3: Table with rows: Role/Title, Qty, Bill%, Start Date, End Date, Duration
 - Section 4: Tech Skills checkboxes (ADF, Databricks, Power BI, Spark, SQL, Python, etc.)
 
-FORM 2 — Allocation Change Request Form:
+FORM 2 - Allocation Change Request Form:
 - Section 1: Request Type, Urgency, Date of Request
 - Section 2: Project Code, Project Name, Client Name, Cluster, COE, Engagement Type
 - Section 3: Table with rows: Resource Email, Current Allocation, New Allocation, Effective From, Effective To, Reason

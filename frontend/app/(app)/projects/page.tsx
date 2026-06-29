@@ -20,7 +20,7 @@ function RagBadge({ value }: { value: string | null }) {
   const v = value ?? "NO_COLOR";
   return (
     <Badge variant="outline" className={`text-xs ${RAG_STYLE[v] ?? RAG_STYLE.NO_COLOR}`}>
-      {v === "NO_COLOR" ? "—" : v}
+      {v === "NO_COLOR" ? "-" : v}
     </Badge>
   );
 }
@@ -132,8 +132,8 @@ export default function ProjectsPage() {
               <tr key={p.project_id} className={`border-t border-red-100 ${i % 2 === 1 ? "bg-red-50/20" : ""}`}>
                 <td className="px-4 py-2 font-mono text-muted-foreground">{p.project_id}</td>
                 <td className="px-4 py-2">{p.client_id}</td>
-                <td className="px-4 py-2 text-muted-foreground">{p.proposition_coe ?? "—"}</td>
-                <td className="px-4 py-2 text-right text-muted-foreground">{p.project_end_date ?? "—"}</td>
+                <td className="px-4 py-2 text-muted-foreground">{p.proposition_coe ?? "-"}</td>
+                <td className="px-4 py-2 text-right text-muted-foreground">{p.project_end_date ?? "-"}</td>
                 <td className="px-4 py-2 text-right font-semibold text-red-700">{p.days_overrun}d over</td>
                 <td className="px-4 py-2 text-right">{p.headcount}</td>
               </tr>
@@ -154,8 +154,8 @@ export default function ProjectsPage() {
               <tr key={p.project_id} className={`border-t border-amber-100 ${i % 2 === 1 ? "bg-amber-50/20" : ""}`}>
                 <td className="px-4 py-2 font-mono text-muted-foreground">{p.project_id}</td>
                 <td className="px-4 py-2">{p.client_id}</td>
-                <td className="px-4 py-2 text-muted-foreground">{p.proposition_coe ?? "—"}</td>
-                <td className="px-4 py-2 text-right text-muted-foreground">{p.project_end_date ?? "—"}</td>
+                <td className="px-4 py-2 text-muted-foreground">{p.proposition_coe ?? "-"}</td>
+                <td className="px-4 py-2 text-right text-muted-foreground">{p.project_end_date ?? "-"}</td>
                 <td className={`px-4 py-2 text-right font-semibold ${p.days_remaining <= 14 ? "text-red-700" : p.days_remaining <= 30 ? "text-amber-700" : "text-muted-foreground"}`}>
                   {p.days_remaining}d left
                 </td>
@@ -215,10 +215,10 @@ export default function ProjectsPage() {
                   <TableCell className="text-xs text-muted-foreground">{p.client_id}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={`text-xs ${p.project_status === "ACTIVE" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-sky-50 text-sky-700 border-sky-200"}`}>
-                      {p.project_status ?? "—"}
+                      {p.project_status ?? "-"}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{p.proposition_coe ?? "—"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{p.proposition_coe ?? "-"}</TableCell>
                   <TableCell><RagBadge value={p.overall_health} /></TableCell>
                   <TableCell className="text-center"><RagBadge value={p.scope_status} /></TableCell>
                   <TableCell className="text-center"><RagBadge value={p.schedule_status} /></TableCell>

@@ -1,4 +1,4 @@
-"""RMG Chatbot — GPT-4o with function calling over existing services."""
+"""RMG Chatbot - GPT-4o with function calling over existing services."""
 import json
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -10,7 +10,21 @@ from app.database import get_db
 
 router = APIRouter()
 
-SYSTEM = """You are the RMG (Resource Management Group) AI assistant at JMan Group.
+# The allocations table is populated in ~weekly segments per project, so a person's
+# current-week row can lag several days-to-weeks behind reality even after it starts.
+# Approved timesheet hours are the ground truth for "are they actually working right
+# now" - used to stop someone whose allocation row hasn't rolled over yet from showing
+# as bench/available. Mirrors app/routers/dashboard.py's _RECENT_REAL_WORK.
+_RECENT_REAL_WORK = """EXISTS (
+        SELECT 1 FROM timesheets t
+        JOIN projects tp ON tp.project_id = t.project_id AND tp.is_active_version = true
+        WHERE t.employee_id = e.employee_id
+          AND t.date >= CURRENT_DATE - INTERVAL '30 days'
+          AND t.status = 'APPROVED'
+          AND LOWER(COALESCE(tp.type_of_project, '')) IN ('client project', 'managed services')
+    )"""
+
+SYSTEM = """You are the RMG (Resource Management Group) AI assistant at Jman Group.
 You help users find resources, check availability, view project health, and manage staffing.
 Answer concisely. Use tables when listing multiple items. Be specific with employee IDs and scores.
 When recommending resources, explain why they're a good fit."""
@@ -50,8 +64,10 @@ def _search_available(db: Session, role: str | None, skill: str | None) -> str:
                COALESCE(SUM(a.allocation_pct), 0) AS allocated
         FROM employees e
         LEFT JOIN allocations a ON a.employee_id = e.employee_id
-          AND a.is_active = true AND a.is_active_version = true
-          AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+          AND a.is_active_version = true
+          AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+        LEFT JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+          AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
         WHERE e.account_status = true AND e.is_active_version = true
           AND e.date_of_resignation IS NULL
     """
@@ -59,7 +75,12 @@ def _search_available(db: Session, role: str | None, skill: str | None) -> str:
     if role:
         q += " AND e.canonical_role ILIKE :role"
         params["role"] = f"%{role}%"
-    q += " GROUP BY e.employee_id, e.job_name, e.canonical_role, e.location HAVING COALESCE(SUM(a.allocation_pct), 0) < 100 ORDER BY allocated ASC LIMIT 10"
+    q += f"""
+        GROUP BY e.employee_id, e.job_name, e.canonical_role, e.location
+        HAVING COALESCE(SUM(a.allocation_pct), 0) < 100
+           AND NOT (COALESCE(SUM(a.allocation_pct), 0) = 0 AND {_RECENT_REAL_WORK})
+        ORDER BY allocated ASC LIMIT 10
+    """
     rows = db.execute(text(q), params).fetchall()
     results = [{"id": r.employee_id, "name": r.job_name, "role": r.canonical_role, "location": r.location, "allocated": f"{r.allocated}%", "available": f"{100 - float(r.allocated)}%"} for r in rows]
     return json.dumps(results)
@@ -71,7 +92,9 @@ def _get_employee_info(db: Session, eid: str) -> str:
         return json.dumps({"error": "Employee not found"})
     allocs = db.execute(text("""
         SELECT project_id, allocation_pct, start_date, end_date, resourcing_status
-        FROM allocations WHERE employee_id = :id AND is_active = true AND is_active_version = true
+        FROM allocations
+        WHERE employee_id = :id AND is_active_version = true
+          AND (end_date IS NULL OR end_date >= CURRENT_DATE)
         ORDER BY start_date
     """), {"id": eid}).fetchall()
     return json.dumps({"employee": {"id": emp.employee_id, "name": emp.job_name, "role": emp.canonical_role, "location": emp.location, "department": emp.department_name}, "allocations": [{"project": a.project_id, "pct": f"{a.allocation_pct}%", "start": str(a.start_date), "end": str(a.end_date), "status": a.resourcing_status} for a in allocs]})
@@ -79,9 +102,16 @@ def _get_employee_info(db: Session, eid: str) -> str:
 
 def _get_dashboard_stats(db: Session) -> str:
     active = db.execute(text("SELECT COUNT(*) FROM employees WHERE account_status = true AND is_active_version = true AND date_of_resignation IS NULL")).scalar()
-    bench = db.execute(text("""
+    bench = db.execute(text(f"""
         SELECT COUNT(*) FROM employees e WHERE e.account_status = true AND e.is_active_version = true AND e.date_of_resignation IS NULL
-          AND NOT EXISTS (SELECT 1 FROM allocations a WHERE a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE))
+          AND COALESCE((
+              SELECT SUM(a.allocation_pct) FROM allocations a
+              JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+              WHERE a.employee_id = e.employee_id AND a.is_active_version = true
+                AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+          ), 0) = 0
+          AND NOT {_RECENT_REAL_WORK}
     """)).scalar()
     pipeline = db.execute(text("SELECT COUNT(*) FROM pipeline_requests WHERE LOWER(status) = 'not resourced'")).scalar()
     projects = db.execute(text("SELECT COUNT(*) FROM projects WHERE UPPER(project_status) = 'ACTIVE' AND is_active_version = true")).scalar()
@@ -95,11 +125,18 @@ def _get_capacity_gap(db: Session) -> str:
           AND likely_start_date <= CURRENT_DATE + INTERVAL '3 months'
         GROUP BY role ORDER BY demand DESC LIMIT 6
     """)).fetchall()
-    bench = db.execute(text("""
+    bench = db.execute(text(f"""
         SELECT e.canonical_role, COUNT(*) AS bench FROM employees e
-        LEFT JOIN allocations a ON a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         WHERE e.account_status = true AND e.is_active_version = true AND e.date_of_resignation IS NULL AND e.canonical_role IS NOT NULL
-        GROUP BY e.canonical_role HAVING COALESCE(SUM(a.allocation_pct), 0) = 0
+          AND COALESCE((
+              SELECT SUM(a.allocation_pct) FROM allocations a
+              JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+              WHERE a.employee_id = e.employee_id AND a.is_active_version = true
+                AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+          ), 0) = 0
+          AND NOT {_RECENT_REAL_WORK}
+        GROUP BY e.canonical_role
     """)).fetchall()
     bench_map = {r.canonical_role: r.bench for r in bench}
     return json.dumps([{"role": r.role, "demand_fte": float(r.demand), "bench": bench_map.get(r.role, 0), "gap": round(float(r.demand) - bench_map.get(r.role, 0), 1)} for r in rows])
@@ -109,7 +146,8 @@ def _get_project_team(db: Session, pid: str) -> str:
     rows = db.execute(text("""
         SELECT a.employee_id, e.job_name, e.canonical_role, a.allocation_pct, a.resourcing_status
         FROM allocations a JOIN employees e ON e.employee_id = a.employee_id
-        WHERE a.project_id = :pid AND a.is_active = true AND a.is_active_version = true
+        WHERE a.project_id = :pid AND a.is_active_version = true
+          AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         ORDER BY e.canonical_role
     """), {"pid": pid}).fetchall()
     return json.dumps([{"id": r.employee_id, "name": r.job_name, "role": r.canonical_role, "alloc": f"{r.allocation_pct}%", "status": r.resourcing_status} for r in rows])

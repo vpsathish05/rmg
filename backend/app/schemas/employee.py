@@ -24,7 +24,7 @@ class EmployeeAvailability(BaseModel):
     allocated_pct: float
     available_pct: float
     allocation_status: str            # On Bench / Available / Partial / Allocated / Over-allocated
-    billability: str | None = None    # BILLABLE / SHADOW / UNBILLED — worst case across active allocs
+    billability: str | None = None    # BILLABLE / SHADOW / UNBILLED - worst case across active allocs
     nearest_end_date: date | None = None  # earliest allocation end date
 
     model_config = {"from_attributes": True}

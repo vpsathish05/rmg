@@ -1,5 +1,5 @@
 """
-Build employee skill embeddings — concatenates all assessed skills per employee
+Build employee skill embeddings - concatenates all assessed skills per employee
 into a text profile, then embeds with text-embedding-3-small.
 
 Run: PYTHONPATH=. python -m etl.build_skill_embeddings

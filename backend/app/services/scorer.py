@@ -1,5 +1,5 @@
 """
-Core scoring engine for Phase 2 — Resource Recommendation.
+Core scoring engine for Phase 2 - Resource Recommendation.
 
 Formula:
   With competency data:    total = skill*0.40 + comp*0.25 + avail*0.25 + prod*0.10
@@ -16,7 +16,7 @@ from sqlalchemy import text
 COMP_ROLE_GROUP: dict[str, str] = {
     "Solutions Enabler":        "Solutions Enabler",
     "Solutions Consultant":     "Solutions Consultant",
-    "Senior Solution Consultant": "Solutions Consultant",
+    "Senior Solutions Consultant": "Solutions Consultant",
     "Senior Software Engineer": "Senior Software Engineer",
 }
 
@@ -62,7 +62,6 @@ def score_all(
 
     # ── 1. Candidate pool ────────────────────────────────────────────────────
     if always_best_match or not canonical_roles:
-        # Include everyone; score differentiates
         emp_rows = db.execute(text("""
             SELECT employee_id, job_name, canonical_role, location, department_name
             FROM employees
@@ -98,17 +97,41 @@ def score_all(
 
     emp_ids = [r.employee_id for r in emp_rows]
 
-    # ── 2. Batch: active allocations ─────────────────────────────────────────
+    # ── 2. Batch: active allocations (exclude BAU) ─────────────────────────────
+    # NOTE: `is_active` is unreliable on current-period rows (allocations load in
+    # weekly segments and the flag can be stale) - date range is the trustworthy check.
     alloc_rows = db.execute(text("""
-        SELECT employee_id, COALESCE(SUM(allocation_pct), 0) AS total_pct
-        FROM allocations
-        WHERE employee_id = ANY(:ids)
-          AND is_active = true
-          AND is_active_version = true
-          AND (end_date IS NULL OR end_date >= CURRENT_DATE)
-        GROUP BY employee_id
+        SELECT a.employee_id, COALESCE(SUM(a.allocation_pct), 0) AS total_pct
+        FROM allocations a
+        JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+        WHERE a.employee_id = ANY(:ids)
+          AND a.is_active_version = true
+          AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+          AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+        GROUP BY a.employee_id
     """), {"ids": emp_ids}).fetchall()
     alloc_cache: dict[str, float] = {r.employee_id: float(r.total_pct) for r in alloc_rows}
+
+    # The allocations table can lag 2-4 weeks behind reality even once a row exists -
+    # cross-check against approved timesheet hours so someone still actively working
+    # doesn't get scored as having free capacity just because their allocation record
+    # hasn't rolled over to the current period yet.
+    recent_work_rows = db.execute(text("""
+        SELECT DISTINCT t.employee_id
+        FROM timesheets t
+        JOIN projects tp ON tp.project_id = t.project_id AND tp.is_active_version = true
+        WHERE t.employee_id = ANY(:ids)
+          AND t.date >= CURRENT_DATE - INTERVAL '30 days'
+          AND t.status = 'APPROVED'
+          AND LOWER(COALESCE(tp.type_of_project, '')) IN ('client project', 'managed services')
+    """), {"ids": emp_ids}).fetchall()
+    recent_real_work: set[str] = {r.employee_id for r in recent_work_rows}
+
+    # ── 2b. Extension-locked employees (project confirmed extending) ──────────
+    # Employees on projects where EM confirmed "extend" or "partial (staying)"
+    # are treated as fully allocated — they should NOT be recommended elsewhere.
+    from app.services.extension_check import get_locked_employee_ids
+    extension_locked: set[str] = get_locked_employee_ids(db)
 
     # ── 3. Batch: skill scores for requested COE ──────────────────────────────
     skill_rows = db.execute(text("""
@@ -192,10 +215,22 @@ def score_all(
         if comp_scores:
             comp_score = sum(comp_scores) / len(comp_scores) / 4.0
 
-        # Availability
+        # Availability - score relative to requested allocation
         allocated = alloc_cache.get(eid, 0.0)
+        if allocated == 0.0 and eid in recent_real_work:
+            # Allocation record hasn't caught up yet, but timesheets show real work
+            # in progress - treat as fully engaged rather than falsely "Available".
+            allocated = 100.0
+        if eid in extension_locked:
+            # Project confirmed extending - treat as fully allocated
+            allocated = 100.0
         available = max(0.0, 100.0 - allocated)
-        avail_score = available / 100.0
+        if requested_alloc_pct > 0 and available >= requested_alloc_pct:
+            avail_score = 1.0  # has enough capacity for the role
+        elif requested_alloc_pct > 0:
+            avail_score = available / requested_alloc_pct  # partial fit
+        else:
+            avail_score = available / 100.0  # fallback if no allocation specified
 
         # Productivity
         hours = prod_cache.get(eid, 0.0)
@@ -209,11 +244,11 @@ def score_all(
         else:
             total = skill_score * 0.65 + avail_score * 0.25 + prod_score * 0.10
 
-        # Category — availability drives the primary split; score ranks within each group
+        # Category - availability drives the primary split; score ranks within each group
         if available >= requested_alloc_pct:
             category = "Available"
         elif total >= 0.40:
-            category = "BestMatch"   # allocated but has measurable fit — discuss reallocation
+            category = "BestMatch"   # allocated but has measurable fit - discuss reallocation
         else:
             category = "Stretch"     # allocated AND weak fit
 

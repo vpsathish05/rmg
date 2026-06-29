@@ -1,127 +1,108 @@
-# RMG — Resource Management System
+# RMG Engine - AI-Powered Resource Management System
 
 ## Project Overview
 AI-driven resourcing system for JMan Group. Replaces manual email-based resource negotiation.
-- UC1: Resource Recommendation Engine (email-triggered, 5-step scored pipeline)
-- UC2: Demand Forecasting (pipeline view)
-- UC3: Availability Dashboard
-- UC4: Project Health / WSR tracking
-
-Source documents: `/docs/` (employee CSV, project CSV, allocations, timesheets, WSR, skills XLSX, competencies XLSX, pipeline XLSX)
+- UC1: RMG Engine - 3-tab view (Pipeline → Extensions → Changes) with AI-powered recommendations
+- UC2: Demand Forecasting - 12-month ML forecast (revenue, clusters, resources, projects, COE gap) + pipeline insights
+- UC3: Dashboard - KPIs + 6 charts with drill-down modals (raw data + calculation)
+- UC4: Project Health - RAG from latest non-NO_COLOR WSR entry
+- UC5: Lifecycle - project & resource timelines with right-panel Gantt
+- UC6: AI Chatbot - GPT-4o function calling with 7 tools
 
 ## Tech Stack
-| Layer | Choice |
-|-------|--------|
-| Frontend | Next.js 15 (App Router) + shadcn/ui + Tailwind CSS + TanStack Query |
-| Backend | FastAPI (Python 3.13) |
-| Database | Neon PostgreSQL 18 (serverless) + pgvector for RAG |
-| ORM | SQLAlchemy 2.x |
-| Auth | NextAuth.js — username/password, single role (RMG team) |
-| AI | OpenAI API — gpt-4o (chat), text-embedding-3-small 1536d (RAG) |
-| Email | Microsoft Graph API — monitors sathishkumar@jmangroup.com |
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 16 (App Router) + React 19 + Tailwind CSS 4 + Recharts |
+| Backend | FastAPI + Python + APScheduler |
+| Database | Azure PostgreSQL + pgvector (1536-d) |
+| AI | GPT-4o + text-embedding-3-small |
+| ML | statsmodels (Holt-Winters) + scikit-learn (ensemble) |
+| Email Out | Azure Communication Services |
+| Email In | Microsoft Graph + PyPDF2 (form fields) + pdfplumber |
+| Auth | Custom JWT (jose), httpOnly cookie |
 
-## Folder Structure
-```
-rmg/
-├── frontend/               ← Next.js 15 (App Router)
-│   ├── app/
-│   ├── components/ui/      ← shadcn components
-│   └── lib/                ← api.ts (axios client), utils.ts
-├── backend/
-│   ├── app/
-│   │   ├── main.py         ← FastAPI app + CORS
-│   │   ├── config.py       ← pydantic-settings (reads .env)
-│   │   ├── database.py     ← SQLAlchemy engine + SessionLocal
-│   │   ├── models/         ← 12 SQLAlchemy ORM models
-│   │   ├── routers/        ← employees, projects, allocations, recommend, forecast, health
-│   │   └── services/       ← scorer.py, llm.py (Phase 2+)
-│   ├── etl/
-│   │   ├── schema.sql      ← Run once to create all 12 tables
-│   │   ├── load_all.py     ← Master ETL runner (python -m etl.load_all)
-│   │   └── loaders/        ← 9 loader modules (one per source file)
-│   ├── requirements.txt
-│   ├── .env                ← NEVER commit (gitignored)
-│   └── .env.example
-└── docs/                   ← Source data files (CSV / XLSX)
-```
+## Key Features
+- 8-step AI scoring pipeline per role (COE detect → semantic match → formula → rationale → re-rank → KB proof → hire signal)
+- **ML Forecasting Service** (5 models, 7 API endpoints, 4.4% MAPE):
+  - Revenue: Holt + Headcount regression ensemble → $59.4M/year forecast, P10/P50/P90
+  - Clusters: Pipeline-derived weights → 5-cluster revenue decomposition
+  - Resources: FTE by role (Holt per role + pipeline overlay) → hiring gap
+  - Projects: Holt-Winters seasonal (90 months) → 430 projects/year with seasonality
+  - COE Gap: Dynamic supply vs demand → hiring recommendations
+- Relative availability scoring: avail_score = 1.0 if capacity meets requested allocation, proportional otherwise
+- pgvector ANN index for semantic skill matching (top-K nearest instead of full scan)
+- Email PDF form parsing: Resourcing Form + Change Request Form → auto-route (NEW→Pipeline, EXTEND→Changes with AI recs, CHANGE→Changes)
+- **Auto-reply for EXTEND emails**: when processed, system auto-runs AI recommendation and sends reply to sender via ACS with top candidates
+- **Send Recommendation email**: multi-recipient support - `to_emails: list[str]`, EM pre-filled from pipeline `em_name`, all rows editable, add/remove recipients, backwards-compatible with legacy `to_email` single field
+- Dashboard drill-downs: click any KPI or chart → modal with raw data + calculation explanation
+- Project Health: uses latest WSR with meaningful status (skips NO_COLOR entries)
+- Nightly pre-compute at 2 AM IST, ~$3.60/night for 240 roles
+- BAU exclusion: type_of_project='BAU Activity' (CLIENT_127) ignored from all allocation calculations - it's a tracking bucket, not real work. 278 BAU-only employees show as bench (available).
 
-## Database — 12 Tables on Neon
-employees, projects, project_coes, allocations, timesheets, weekly_status,
-employee_skills, employee_competencies, role_mapping, pipeline_requests,
-email_requests, project_embeddings
+## Scoring Notes (known limitations - improvement backlog)
+- Competency data only exists for 3 roles: Solutions Enabler, Solutions Consultant, Senior Software Engineer. All other roles use `skill×0.65 + avail×0.25 + prod×0.10` formula.
+- `SKILL_NEUTRAL = 0.15` applied when employee has skills in other COEs but not the requested one.
+- Inline recommend uses full-scan semantic search; nightly cache uses ANN - results can differ slightly.
+- Availability check uses today's allocations, not the role's `likely_start_date` - future-rolling candidates may show as BestMatch when they'll actually be free by start date.
+- KB proof badges have no minimum similarity threshold - low-relevance matches still appear.
 
-## Loaded Row Counts (Phase 0 baseline)
-| Table | Rows |
-|-------|------|
-| employees | 1,042 |
-| projects | 2,040 |
-| project_coes | 1,223 |
-| allocations | 29,690 |
-| timesheets | 126,336 |
-| weekly_status | 71,205 |
-| employee_skills | 82,211 |
-| employee_competencies | 700 |
-| role_mapping | 27 |
-| pipeline_requests | 293 |
-
-## Environment Variables
-- Backend: copy `backend/.env.example` → `backend/.env`, fill in real values
-- Frontend: copy `frontend/.env.example` → `frontend/.env.local`
-- **Never commit `.env` files — they are gitignored**
-
-Key var: `DATABASE_URL` — Neon PostgreSQL connection string
-
-## Team
-> Each developer must set their git identity before working:
+## ML Forecasting
 ```bash
-git config user.name "Your Name"
-git config user.email "your@email.com"
+cd backend && source .venv/bin/activate
+
+# Train all models (5.3s)
+PYTHONPATH=. python3 -m ml.train
+
+# Generate predictions (table or JSON)
+PYTHONPATH=. python3 -m ml.predict --horizon 12
+
+# Backtest evaluation (4.4% MAPE)
+PYTHONPATH=. python3 -m ml.evaluate
 ```
 
-| Developer | Email | Owns |
-|-----------|-------|------|
-| Sathish Kumar | sathishkumar@jmangroup.com | Architect, project lead |
-| (add team members here) | | |
+API: `/api/forecast/ml/*` (revenue, revenue/clusters, projects, resources, coe-gap, summary, actuals)
 
-## Conventions
-- Backend routes live in `backend/app/routers/`, one file per domain (e.g. `resources.py`, `projects.py`)
-- Frontend pages live in `frontend/app/`, using Next.js App Router conventions
-- Shared types between frontend and backend should be documented in `docs/data-model.md`
-- All API endpoints prefixed with `/api/v1/`
+## Brand Guidelines
+- Primary: #19105B (Midnight Blue), Secondary: #FF6196 (Rose)
+- 75% white, 20% primary, 5% secondary
+- Font: Arial, body 13px base
 
 ## Running Locally
 ```bash
-# Backend (first time)
-cd backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # then fill in DATABASE_URL and OPENAI_API_KEY
-
-# Run schema (first time only)
-python3 -c "import os,psycopg2; from dotenv import load_dotenv; load_dotenv('.env'); conn=psycopg2.connect(os.environ['DATABASE_URL']); conn.cursor().execute(open('etl/schema.sql').read()); conn.commit()"
-
-# Run ETL (first time only)
-PYTHONPATH=. python3 -m etl.load_all
-
-# Start API
-source .venv/bin/activate
+# Backend
+cd backend && source .venv/bin/activate
 uvicorn app.main:app --reload --port 8000
 
 # Frontend
-cd frontend
-cp .env.local.example .env.local
-npm install
-npm run dev  # → http://localhost:3000
+cd frontend && npm run dev
 ```
 
-## Scoring Formula (Phase 2)
-```
-Total = skill×0.40 + competency×0.25 + availability×0.25 + productivity×0.10
-```
-Fallback (no competency data): `skill×0.65 + availability×0.25 + productivity×0.10`
+## Session Decisions & Improvements Log
 
-## Open Questions (non-blocking)
-- Q2: allocation % range values (e.g. "25-50%") — how to interpret
-- Q3: Trainee SEs — include or exclude from recommendations
-- Q4: Does date_of_resignation = last working day or resignation date?
-- Q5: Cross-COE recommendations allowed?
+### Session - July 2026
+**Send Recommendation - multi-recipient upgrade**
+- `POST /api/rmg/send-recommendation` now accepts `to_emails: list[str]` (was single `to_email: str`)
+- Legacy `to_email: str | None` field kept for backwards compatibility - merged at validation time
+- Frontend `SendRecommendationBtn` pre-fills first row from `project.em_name` (EM badge shown)
+- Every email row is fully editable; rows can be added (`+ Add recipient`) or removed (`X`)
+- `Enter` key in any row adds new row; send button shows live count `Send to N`
+- Frontend error handler parses both custom `{message}` and Pydantic `{detail}` 422 formats
+
+**Scoring logic - identified improvement backlog (not yet implemented)**
+- Inline `/api/rmg/recommend-role` still uses full-scan `compute_semantic_skill_scores` - should switch to `compute_semantic_skill_scores_ann(top_k=100)` (3-line fix)
+- Bench employees penalised on `prod_score` (0 hours logged = 0 score) - should use neutral 0.5 for available employees
+- KB proof `search_employee_proofs` returns results regardless of similarity - add `>= 0.35` threshold
+- Competency covers only 3 roles (Solutions Enabler, Solutions Consultant, Senior Software Engineer) - all others use the no-comp formula
+- Availability scoring uses `CURRENT_DATE`, not `likely_start_date` - future-rolling employees may be misclassified
+
+**Forecast page - documented all ML logic**
+- Revenue: Holt damped (60%) + headcount regression (40%) ensemble, P10/P50/P90 with 8%/month widening
+- Cluster: pipeline-derived weights + exponential decay blending (`e^-0.3×distance`)
+- Resource FTE: Holt per role + 50% pipeline overlay; hiring gap = peak demand − headcount × 80%
+- Project volume: Holt-Winters additive seasonal (period=12) on 90 months
+- COE Gap: arithmetic supply/demand projection - no ML model
+- MAPE 4.4% on revenue model only; other models do not compute MAPE
+
+
+## Team Super Nova
+Sathish · Karthi · Lejoy · Rohit

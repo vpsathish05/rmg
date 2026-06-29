@@ -3,9 +3,9 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useRmgPipeline, useRmgExtensions, useRmgEmailRequests, useKbStatus,
-  useRmgRecommendations, useRecCacheStatus, useExtensionNeeds,
+  useRmgRecommendations, useRecCacheStatus, useExtensionNeeds, useExtensionConfirmations,
   type PipelineProject, type PipelineRole, type RmgCandidate, type KbProof,
-  type ExtensionNeedProject, type LeavingResource,
+  type ExtensionNeedProject, type LeavingResource, type ExtensionConfirmation,
 } from "@/lib/hooks";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -63,169 +63,6 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
 }
 
 
-// ── Pipeline Logic Modal ───────────────────────────────────────────────────
-function PipelineLogicModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-8 py-5 flex items-center justify-between rounded-t-3xl z-10">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">AI Recommendation Pipeline</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Visual flow: how data goes in and recommendations come out</p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-all">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="px-8 py-6 space-y-8">
-
-          {/* ── High-Level Flow ── */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-4">End-to-End Flow</h3>
-            <div className="flex items-start gap-2 overflow-x-auto pb-2">
-              {[
-                { label: "Pipeline Role", color: "#FF6196" },
-                { label: "COE Detect", color: "#19105B" },
-                { label: "Skills Extract", color: "#19105B" },
-                { label: "Semantic Match", color: "#19105B" },
-                { label: "Formula Score", color: "#19105B" },
-                { label: "Rationale", color: "#19105B" },
-                { label: "Re-Rank", color: "#19105B" },
-                { label: "KB Proof", color: "#19105B" },
-                { label: "Output", color: "#FF6196" },
-              ].map((s, i) => (
-                <div key={i} className="flex items-center shrink-0">
-                  <div className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white whitespace-nowrap" style={{ background: s.color }}>{s.label}</div>
-                  {i < 8 && <ChevronRight className="w-3.5 h-3.5 text-gray-300 mx-0.5 shrink-0" />}
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-3 mt-3 text-[10px]">
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> AI/LLM</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> Embeddings</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> DB/Math</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> Evidence</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#FF6196"}} /> Input/Output</span>
-            </div>
-          </section>
-
-          {/* ── Step-by-Step ── */}
-          <section className="space-y-3">
-            <h3 className="text-sm font-bold text-gray-900">Step-by-Step</h3>
-            {[
-              { num: 1, title: "COE Detection", tag: "SQL → fallback → GPT-4o", color: "violet", desc: "Queries employee_skills: which COE do most people with this role have? If empty → global fallback → GPT-4o infers from available COEs." },
-              { num: 2, title: "Skills Extraction", tag: "Only when null", color: "violet", desc: "If pipeline has skills → use them. If null → GPT-4o: \"For this role + COE, list 3-5 technical skills.\"" },
-              { num: 3, title: "Semantic Skill Match", tag: "Embeddings API + pgvector", color: "blue", desc: "Embeds role query (role+COE+skills) into 1536-d vector → cosine similarity vs 286 pre-computed employee skill profile vectors." },
-              { num: 4, title: "Formula Scoring", tag: "Pure math — free", color: "emerald", desc: "5 batch SQL queries → score all employees: skill×0.40 + comp×0.25 + avail×0.25 + prod×0.10. Categorize: Available / BestMatch / Stretch." },
-              { num: 5, title: "Rationale Generation", tag: "GPT-4o × 10 parallel", color: "violet", desc: "Per top-10 candidate: \"Write 2-3 sentences about skill fit, availability, concerns for this role.\"" },
-              { num: 6, title: "LLM Re-Ranking", tag: "GPT-4o × 1", color: "violet", desc: "\"Re-order these 10 candidates considering skill alignment, seniority match, location, team composition.\" Catches title-match the formula misses." },
-              { num: 7, title: "KB Proof Search", tag: "pgvector cosine", color: "amber", desc: "For top 6: finds past projects they worked on with similar skills/COE — evidence of relevant experience." },
-              { num: 8, title: "Hire Signal", tag: "Only when 0 matches", color: "amber", desc: "GPT-4o: \"No match found. Generate actionable hiring profile: seniority, skills, years, contract type.\"" },
-            ].map(s => (
-              <div key={s.num} className={`rounded-xl border p-3 flex gap-3 items-start`} style={{borderColor: "#19105B20", background: "#19105B08"}}>
-                <span className="w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0" style={{background: "#19105B"}}>{s.num}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-gray-900">{s.title}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-500">{s.tag}</span>
-                  </div>
-                  <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">{s.desc}</p>
-                </div>
-              </div>
-            ))}
-          </section>
-
-          {/* ── Formula Visual ── */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-3">Scoring Formula</h3>
-            <div className="grid grid-cols-4 gap-2 mb-3">
-              {[
-                { label: "SKILL", weight: "×0.40", sub: "50% COE + 50% semantic", color: "#7c3aed" },
-                { label: "COMP", weight: "×0.25", sub: "Competency assessments", color: "#a855f7" },
-                { label: "AVAIL", weight: "×0.25", sub: "(100 - alloc%) / 100", color: "#059669" },
-                { label: "PROD", weight: "×0.10", sub: "Hours last 8 weeks", color: "#6b7280" },
-              ].map(f => (
-                <div key={f.label} className="p-2.5 rounded-xl border text-center" style={{borderColor: f.color + "33", background: f.color + "0a"}}>
-                  <p className="text-[10px] font-bold" style={{color: f.color}}>{f.label}</p>
-                  <p className="text-sm font-bold text-gray-900 mt-0.5">{f.weight}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{f.sub}</p>
-                </div>
-              ))}
-            </div>
-            <div className="bg-gray-900 rounded-xl p-3 font-mono text-[11px] text-gray-200 space-y-1">
-              <p><span className="text-violet-300">With comp:</span> total = skill×0.40 + comp×0.25 + avail×0.25 + prod×0.10</p>
-              <p><span className="text-violet-300">Without:</span>&nbsp; total = skill×0.65 + avail×0.25 + prod×0.10</p>
-            </div>
-          </section>
-
-          {/* ── Categories ── */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-3">Output Categories</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 mb-1" />
-                <p className="text-xs font-bold text-emerald-800">Available</p>
-                <p className="text-[10px] text-emerald-600">Free capacity ≥ requested %</p>
-              </div>
-              <div className="p-3 rounded-xl bg-violet-50 border border-violet-100">
-                <Sparkles className="w-4 h-4 text-violet-600 mb-1" />
-                <p className="text-xs font-bold text-violet-800">Best Match</p>
-                <p className="text-[10px] text-violet-600">Allocated, score ≥ 40%</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
-                <AlertTriangle className="w-4 h-4 text-gray-400 mb-1" />
-                <p className="text-xs font-bold text-gray-700">Stretch</p>
-                <p className="text-[10px] text-gray-500">Weak fit — hidden</p>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Timing & Cost ── */}
-          <section className="grid grid-cols-2 gap-4">
-            <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
-              <p className="text-xs font-bold text-violet-900 mb-2">When it runs</p>
-              <div className="space-y-1 text-[11px] text-violet-800">
-                <p><strong>Nightly 2 AM IST</strong> — all roles (~28 min)</p>
-                <p><strong>Refresh button</strong> — on demand</p>
-                <p><strong>Expand role</strong> — inline ~3-7s</p>
-              </div>
-            </div>
-            <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
-              <p className="text-xs font-bold text-emerald-900 mb-2">Cost</p>
-              <div className="space-y-1 text-[11px] text-emerald-800">
-                <p><strong>~$0.015</strong> per role</p>
-                <p><strong>~$3.60</strong> nightly (240 roles)</p>
-                <p>Steps 1-4 = <strong>free</strong> (SQL + math)</p>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Data Sources ── */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-3">Data Sources</h3>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              {[
-                "employee_skills — COE assessments (82K)",
-                "employee_skill_embeddings — 286 profiles",
-                "allocations — active, end_date ≥ today",
-                "timesheets — last 8 weeks hours",
-                "employee_competencies — 196 employees",
-                "project_embeddings — 500 projects KB",
-              ].map(item => (
-                <div key={item} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-100">
-                  <Database className="w-3 h-3 text-gray-400 shrink-0" />
-                  <span className="text-gray-600">{item}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Candidate Card ─────────────────────────────────────────────────────────
 function CandidateCard({ candidate, rank, category }: {
@@ -347,7 +184,7 @@ function RoleRecommendations({ entry, project, role, onReload }: {
           <div>
             <p className="text-sm font-semibold text-red-800">Could not load recommendations</p>
             <p className="text-xs text-red-600 mt-0.5">
-              {!entry.coe ? "COE could not be detected." : "Scoring failed — please retry."}
+              {!entry.coe ? "COE could not be detected." : "Scoring failed - please retry."}
             </p>
           </div>
         </div>
@@ -388,7 +225,7 @@ function RoleRecommendations({ entry, project, role, onReload }: {
             <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-100">
               <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs font-semibold text-amber-900">No Resource — Hire Signal</p>
+                <p className="text-xs font-semibold text-amber-900">No Resource - Hire Signal</p>
                 <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">{entry.data.hire_signal}</p>
               </div>
             </div>
@@ -418,17 +255,17 @@ function RoleRow({ role, roleKey, project, isRoleOpen, entry, onToggleRole, onRe
       >
         <td className="px-4 py-3">
           <p className={`text-sm truncate ${isNR ? "font-semibold text-gray-900" : "font-medium text-gray-600"}`}>
-            {role.role_code_raw ?? "—"}
+            {role.role_code_raw ?? "-"}
           </p>
           {role.required_skills && (
             <p className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[200px]">{role.required_skills}</p>
           )}
         </td>
         <td className="px-3 py-3 text-center tabular-nums text-xs text-gray-500">
-          {role.allocation_pct != null ? `${role.allocation_pct}%` : "—"}
+          {role.allocation_pct != null ? `${role.allocation_pct}%` : "-"}
         </td>
         <td className="px-3 py-3 text-center tabular-nums text-xs text-gray-500">
-          {role.duration_weeks != null ? `${role.duration_weeks}w` : "—"}
+          {role.duration_weeks != null ? `${role.duration_weeks}w` : "-"}
         </td>
         <td className="px-3 py-3 text-center">
           {isNR ? (
@@ -450,7 +287,7 @@ function RoleRow({ role, roleKey, project, isRoleOpen, entry, onToggleRole, onRe
                 {role.resourced_employee_id}
               </span>
             ) : (
-              <span className="text-xs text-gray-300">—</span>
+              <span className="text-xs text-gray-300">-</span>
             )
           ) : !entry || entry.status === "loading" ? (
             <span className="flex items-center gap-1.5 text-xs text-gray-400">
@@ -505,69 +342,175 @@ function RoleRow({ role, roleKey, project, isRoleOpen, entry, onToggleRole, onRe
 function SendRecommendationBtn({ project, recCache }: { project: PipelineProject; recCache: Record<string, CacheEntry> }) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const [email, setEmail] = useState("");
   const [showInput, setShowInput] = useState(false);
-
   const [error, setError] = useState("");
 
+  // Pre-fill with EM email if present - every row is fully editable
+  const [emails, setEmails] = useState<string[]>(() =>
+    project.em_name ? [project.em_name] : [""]
+  );
+
+  const updateEmail = (i: number, val: string) =>
+    setEmails(prev => prev.map((e, idx) => (idx === i ? val : e)));
+
+  const addRecipient = () => setEmails(prev => [...prev, ""]);
+
+  const removeRecipient = (i: number) =>
+    setEmails(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev);
+
+  const validEmails = emails.map(e => e.trim()).filter(Boolean);
+
   const handleSend = async () => {
-    if (!email) return;
+    if (!validEmails.length) return;
     setSending(true);
     setError("");
+
     const roles = project.roles
       .filter(r => r.status === "Not Resourced")
       .map(r => {
         const entry = recCache[`${project.client_name}::${r.id}`];
-        const candidates = [...(entry?.data?.available ?? []), ...(entry?.data?.best_match ?? [])].map(c => ({
-          employee_id: c.employee_id, job_name: c.job_name, score: Math.round(c.total_score * 100), category: c.category,
+        const candidates = [
+          ...(entry?.data?.available ?? []),
+          ...(entry?.data?.best_match ?? []),
+        ].map(c => ({
+          employee_id: c.employee_id,
+          job_name: c.job_name,
+          score: Math.round(c.total_score * 100),
+          category: c.category,
         }));
         return { role_code: r.role_code_raw ?? "Unknown", candidates };
       })
       .filter(r => r.candidates.length > 0);
 
     if (roles.length === 0) {
-      setError("No candidates loaded yet — expand roles first.");
+      setError("No candidates loaded yet - expand roles first.");
       setSending(false);
       return;
     }
 
     try {
-      const res = await api.post("/api/rmg/send-recommendation", { client_name: project.client_name, to_email: email, roles });
-      if (res.data?.status === "error") { setError(res.data.message || "Send failed"); }
-      else { setSent(true); setTimeout(() => { setSent(false); setShowInput(false); }, 3000); }
+      const res = await api.post("/api/rmg/send-recommendation", {
+        client_name: project.client_name,
+        to_emails: validEmails,
+        roles,
+      });
+      if (res.data?.status === "error") {
+        setError(res.data.message || "Send failed");
+      } else {
+        setSent(true);
+        setTimeout(() => { setSent(false); setShowInput(false); }, 3000);
+      }
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Send failed");
+      // Handle both our custom error format and Pydantic validation error format
+      const data = e?.response?.data;
+      if (data?.message) {
+        setError(data.message);
+      } else if (data?.detail) {
+        // Pydantic 422 - extract readable message
+        const detail = Array.isArray(data.detail)
+          ? data.detail.map((d: any) => d.msg).join(", ")
+          : String(data.detail);
+        setError(`Validation error: ${detail}`);
+      } else {
+        setError(e?.message || "Send failed");
+      }
     }
     setSending(false);
   };
 
+  // Reset email list to EM pre-fill whenever panel is opened
+  const handleOpen = () => {
+    setEmails(project.em_name ? [project.em_name] : [""]);
+    setError("");
+    setShowInput(true);
+  };
+
   if (sent) return (
     <div className="px-4 py-3 flex items-center gap-2 border-t border-gray-100 text-xs text-emerald-600 font-medium">
-      <CheckCircle2 className="w-3.5 h-3.5" /> Sent successfully
+      <CheckCircle2 className="w-3.5 h-3.5" />
+      Sent to {validEmails.length} recipient{validEmails.length > 1 ? "s" : ""}
     </div>
   );
 
   return (
     <div className="px-4 py-3 flex flex-col gap-2 border-t border-gray-100">
       {error && (
-        <p className="text-xs text-red-600 flex items-center gap-1.5"><AlertTriangle className="w-3 h-3" />{error}</p>
+        <p className="text-xs text-red-600 flex items-center gap-1.5">
+          <AlertTriangle className="w-3 h-3" />{error}
+        </p>
       )}
+
       {!showInput ? (
-        <button onClick={() => setShowInput(true)}
-          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-violet-600 hover:bg-violet-50 transition-all border border-violet-200 w-fit">
+        <button
+          onClick={handleOpen}
+          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-violet-600 hover:bg-violet-50 transition-all border border-violet-200 w-fit"
+        >
           <Send className="w-3 h-3" /> Send Recommendation
         </button>
       ) : (
-        <div className="flex items-center gap-2 flex-1">
-          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Recipient email"
-            className="flex-1 max-w-xs text-xs px-3 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300" />
-          <button onClick={handleSend} disabled={sending || !email}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50 transition-all"
-            style={{ background: "#19105B" }}>
-            {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-            Send
+        <div className="flex flex-col gap-2">
+
+          {/* Recipient rows - every field editable */}
+          {emails.map((email, i) => (
+            <div key={i} className="flex items-center gap-2">
+              {/* Label badge */}
+              <span className="text-[10px] font-semibold w-7 text-center shrink-0 px-1 py-0.5 rounded"
+                style={{
+                  background: i === 0 && project.em_name ? "#19105B" : "#F2F2F2",
+                  color:      i === 0 && project.em_name ? "#ffffff"  : "#19105B",
+                }}>
+                {i === 0 && project.em_name ? "EM" : i + 1}
+              </span>
+
+              {/* Editable email input */}
+              <input
+                type="email"
+                value={email}
+                onChange={e => updateEmail(i, e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") addRecipient(); }}
+                placeholder={i === 0 ? "EM or recipient email" : "Add email"}
+                className="flex-1 max-w-xs text-xs px-3 py-1.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
+              />
+
+              {/* Remove button - always show so every row is removable */}
+              <button
+                onClick={() => removeRecipient(i)}
+                disabled={emails.length === 1}
+                className="text-gray-300 hover:text-red-400 disabled:opacity-30 transition-colors"
+                title="Remove recipient"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+
+          {/* Add another recipient */}
+          <button
+            onClick={addRecipient}
+            className="flex items-center gap-1 text-[11px] font-medium text-violet-500 hover:text-violet-700 w-fit transition-colors"
+          >
+            <span className="text-base leading-none">+</span> Add recipient
           </button>
-          <button onClick={() => setShowInput(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+
+          {/* Action row */}
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={handleSend}
+              disabled={sending || validEmails.length === 0}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50 transition-all"
+              style={{ background: "#19105B" }}
+            >
+              {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+              Send to {validEmails.length || 0}
+            </button>
+            <button
+              onClick={() => setShowInput(false)}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+
         </div>
       )}
     </div>
@@ -714,6 +657,7 @@ function PipelineAccordion({ projects, recCache, expandedClients, expandedRoleKe
 function ExtensionsView() {
   const { data: needs = [], isLoading } = useExtensionNeeds();
   const { data: extData } = useRmgExtensions();
+  const { data: confirmations = [] } = useExtensionConfirmations();
   const extensions = extData?.allocation_extensions ?? [];
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
   const [expandedResource, setExpandedResource] = useState<string | null>(null);
@@ -779,6 +723,40 @@ function ExtensionsView() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-3">
+        {/* Extension Confirmation Status */}
+        {confirmations.length > 0 && (
+          <section className="space-y-2 mb-2">
+            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              <Mail className="w-4 h-4 text-violet-500" />
+              Extension Confirmations ({confirmations.length})
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {confirmations.map(conf => (
+                <div key={conf.id} className={`rounded-xl border p-3`} style={{
+                  borderColor: conf.response === "extend" ? "#3411A330" : conf.response === "no_extension" ? "#19105B20" : conf.response === "partial" ? "#FF619630" : "#A16BDB30",
+                  background: conf.response === "extend" ? "#3411A308" : conf.response === "no_extension" ? "#19105B05" : conf.response === "partial" ? "#FF619608" : "#A16BDB08",
+                }}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold" style={{ color: "#19105B" }}>{conf.client_id}</span>
+                    <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full" style={{
+                      background: conf.response === "extend" ? "#3411A315" : conf.response === "no_extension" ? "#19105B10" : conf.response === "partial" ? "#FF619615" : "#A16BDB15",
+                      color: conf.response === "extend" ? "#3411A3" : conf.response === "no_extension" ? "#19105B" : conf.response === "partial" ? "#FF6196" : "#A16BDB",
+                    }}>
+                      {conf.response ? conf.response.replace("_", " ") : `Pending (${conf.send_count}x sent)`}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-500">{conf.project_id}</p>
+                  <div className="flex items-center gap-3 mt-1.5 text-[10px] text-gray-400">
+                    {conf.project_end_date && <span>Ends {new Date(conf.project_end_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
+                    <span>{conf.headcount} people</span>
+                    {conf.response === "partial" && conf.staying_employee_ids && <span>{conf.staying_employee_ids.length} staying</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {isLoading ? (
           <div className="flex items-center justify-center py-20 gap-2 text-sm text-gray-400">
             <Loader2 className="w-5 h-5 animate-spin text-violet-400" /> Loading…
@@ -794,7 +772,7 @@ function ExtensionsView() {
             <section className="space-y-3">
               <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                 <Users className="w-4 h-4 text-violet-500" />
-                Resource Needs — Replacement Required ({totalLeaving})
+                Resource Needs - Replacement Required ({totalLeaving})
               </h2>
               {filtered.map(project => {
                 const isOpen = expandedProject === project.project_id;
@@ -852,10 +830,10 @@ function ExtensionsView() {
                                       <p className="text-sm font-semibold text-gray-900">{res.job_name && res.job_name !== "nan" ? res.job_name : res.employee_id}</p>
                                       <p className="text-[10px] text-gray-400 font-mono">{res.employee_id}</p>
                                     </td>
-                                    <td className="px-3 py-3 text-gray-600">{res.canonical_role && res.canonical_role !== "nan" ? res.canonical_role : "—"}</td>
-                                    <td className="px-3 py-3 text-center tabular-nums text-gray-500">{res.allocation_pct != null ? `${res.allocation_pct}%` : "—"}</td>
+                                    <td className="px-3 py-3 text-gray-600">{res.canonical_role && res.canonical_role !== "nan" ? res.canonical_role : "-"}</td>
+                                    <td className="px-3 py-3 text-center tabular-nums text-gray-500">{res.allocation_pct != null ? `${res.allocation_pct}%` : "-"}</td>
                                     <td className="px-3 py-3 text-center tabular-nums text-gray-500">
-                                      {res.alloc_end_date ? new Date(res.alloc_end_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}
+                                      {res.alloc_end_date ? new Date(res.alloc_end_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "-"}
                                     </td>
                                     <td className="px-3 py-3 text-center">
                                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">{res.days_gap}d</span>
@@ -926,7 +904,7 @@ function ExtensionsView() {
                                               <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-100">
                                                 <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                                                 <div>
-                                                  <p className="text-xs font-semibold text-amber-900">No Resource — Hire Signal</p>
+                                                  <p className="text-xs font-semibold text-amber-900">No Resource - Hire Signal</p>
                                                   <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">{entry.data.hire_signal}</p>
                                                 </div>
                                               </div>
@@ -969,9 +947,9 @@ function ExtensionsView() {
                         <tr key={e.project_id} className="hover:bg-violet-50/30 transition-colors">
                           <td className="px-4 py-3 font-mono text-[11px] text-gray-700">{e.project_id}</td>
                           <td className="px-4 py-3 text-gray-600">{e.client_id}</td>
-                          <td className="px-4 py-3 text-gray-500">{e.proposition_coe ?? "—"}</td>
-                          <td className="px-4 py-3 tabular-nums text-gray-500">{e.project_end_date ? new Date(e.project_end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}</td>
-                          <td className="px-4 py-3 tabular-nums text-gray-500">{e.max_alloc_end_date ? new Date(e.max_alloc_end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}</td>
+                          <td className="px-4 py-3 text-gray-500">{e.proposition_coe ?? "-"}</td>
+                          <td className="px-4 py-3 tabular-nums text-gray-500">{e.project_end_date ? new Date(e.project_end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "-"}</td>
+                          <td className="px-4 py-3 tabular-nums text-gray-500">{e.max_alloc_end_date ? new Date(e.max_alloc_end_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "-"}</td>
                           <td className="px-4 py-3 tabular-nums font-bold text-violet-600">+{e.days_extended}d</td>
                           <td className="px-4 py-3 tabular-nums text-gray-600">{e.headcount}</td>
                         </tr>
@@ -1030,8 +1008,8 @@ function ChangeRequestCard({ r }: { r: { id: string; source_email: string | null
         <span className="text-xs text-gray-500">{r.source_email}</span>
         {parsed.client_name && <span className="text-xs font-bold" style={{ color: "#19105B" }}>{parsed.client_name}</span>}
         {parsed.project_id && <span className="text-[10px] font-mono text-gray-400">{parsed.project_id}</span>}
-        <span className="text-xs text-gray-400 ml-auto">{r.received_at ? new Date(r.received_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: r.status === "PARSED" ? "#19105B10" : "#FFC00020", color: r.status === "PARSED" ? "#19105B" : "#d97706" }}>{r.status}</span>
+        <span className="text-xs text-gray-400 ml-auto">{r.received_at ? new Date(r.received_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-"}</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: r.status === "PARSED" ? "#19105B10" : r.status === "REPLIED" ? "#05966910" : "#FFC00020", color: r.status === "PARSED" ? "#19105B" : r.status === "REPLIED" ? "#059669" : "#d97706" }}>{r.status === "REPLIED" ? "Replied" : r.status}</span>
       </div>
 
       {expanded && (
@@ -1119,7 +1097,7 @@ function ChangesView() {
         for (const e of data.emails) {
           setLogs(prev => [...prev, `Extracting PDF from: ${e.from}...`, `Parsing with AI: "${e.subject}"...`, `Routed successfully.`]);
         }
-        setLogs(prev => [...prev, `Done — ${data.processed} email(s) processed.`]);
+        setLogs(prev => [...prev, `Done - ${data.processed} email(s) processed.`]);
         queryClient.invalidateQueries({ queryKey: ["rmg-email-requests"] });
         queryClient.invalidateQueries({ queryKey: ["rmg-pipeline"] });
       }
@@ -1187,7 +1165,7 @@ export default function RmgEnginePage() {
   const [tab, setTab] = useState<TabType>("pipeline");
   const [search, setSearch] = useState("");
   const [showNROnly, setShowNROnly] = useState(false);
-  const [showLogicModal, setShowLogicModal] = useState(false);
+  const [showDocModal, setShowDocModal] = useState(false);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [expandedRoleKey, setExpandedRoleKey] = useState<string | null>(null);
   const [recCache, setRecCache] = useState<Record<string, CacheEntry>>({});
@@ -1268,7 +1246,7 @@ export default function RmgEnginePage() {
   }, [serverRecs, rawProjects]);
 
 
-  // Auto-expand first NR client (no background pre-load — use server recs)
+  // Auto-expand first NR client (no background pre-load - use server recs)
   useEffect(() => {
     if (!rawProjects.length || initialExpandedRef.current) return;
     initialExpandedRef.current = true;
@@ -1337,8 +1315,8 @@ export default function RmgEnginePage() {
             <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><Database className="w-3 h-3" /> {kbStatus.embeddings} KB</span>
           )}
           <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 rounded-xl"
-            onClick={() => setShowLogicModal(true)}>
-            <FileText className="w-3 h-3" /> Logic
+            onClick={() => setShowDocModal(true)}>
+            <FileText className="w-3 h-3" /> How It Works
           </Button>
           <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 rounded-xl"
             onClick={() => refreshRecs.mutate()} disabled={refreshRecs.isPending || cacheStatus?.is_running}>
@@ -1370,7 +1348,22 @@ export default function RmgEnginePage() {
       {tab === "extensions" && <ExtensionsView />}
       {tab === "changes" && <ChangesView />}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-      <PipelineLogicModal open={showLogicModal} onClose={() => setShowLogicModal(false)} />
+      {showDocModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowDocModal(false)}>
+          <div className="relative w-[92vw] h-[90vh] bg-white shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-3 shrink-0" style={{ background: "#19105B" }}>
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-4 h-4 text-white" />
+                <span className="text-sm font-bold text-white">AI Recommendation Engine - How It Works</span>
+              </div>
+              <button onClick={() => setShowDocModal(false)} className="w-8 h-8 flex items-center justify-center text-white opacity-70 hover:opacity-100 transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <iframe src="/ai-pipeline.html" className="flex-1 w-full border-none" title="AI Pipeline Documentation" />
+          </div>
+        </div>
+      )}
     </>
   );
 }

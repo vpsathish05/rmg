@@ -8,9 +8,9 @@ ROLE_MAPPING_ROWS = [
     ("AP/P",                ["Associate Partner", "Partner"],                                        True,  False, None),
     ("C",                   ["Consultant"],                                                          False, False, None),
     ("C/SAC/AC",            ["Consultant", "Senior Associate Consultant", "Associate Consultant"],   True,  False, None),
-    ("EM",                  ["Engagement Manager"],                                                  False, True,  "Standalone functional role — no employee grade match. Always Best Match."),
+    ("EM",                  ["Engagement Manager"],                                                  False, True,  "Standalone functional role - no employee grade match. Always Best Match."),
     ("Enabler",             ["Solutions Enabler"],                                                   False, False, None),
-    ("GTM Architect",       ["GTM Architect"],                                                       False, True,  "Standalone specialized role — no employee grade match. Always Best Match."),
+    ("GTM Architect",       ["GTM Architect"],                                                       False, True,  "Standalone specialized role - no employee grade match. Always Best Match."),
     ("M",                   ["Manager"],                                                             False, False, None),
     ("P",                   ["Principal"],                                                           False, False, None),
     ("PA",                  ["Principal"],                                                           False, False, "Principal Architect = Principal"),
@@ -27,7 +27,7 @@ ROLE_MAPPING_ROWS = [
     ("Snr Sol Con",         ["Senior Solution Consultant"],                                          False, False, "= Manager"),
     ("Sol Con",             ["Senior Consultant"],                                                   False, False, "= Solution Consultant"),
     ("Sol Con/Enabler/SSE", ["Senior Consultant", "Solutions Enabler", "Senior Software Engineer"],  True,  False, None),
-    ("Sr DS SME",           None,                                                                    False, False, "IGNORED — excluded from recommendation engine"),
+    ("Sr DS SME",           None,                                                                    False, False, "IGNORED - excluded from recommendation engine"),
     ("Sr Sol Con",          ["Senior Solution Consultant"],                                          False, False, "= Manager"),
 ]
 

@@ -57,7 +57,7 @@ def load(conn, xlsx_path: str, role_mapping: dict) -> int:
         "Skillset", "Skillset Match (Complete / Partial / No)",
         "SOW Signed", "Comments",
     ]
-    # Normalise columns — take whatever is there
+    # Normalise columns - take whatever is there
     df.columns = [str(c).strip() for c in df.columns]
 
     rows = []

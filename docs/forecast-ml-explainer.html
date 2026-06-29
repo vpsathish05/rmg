@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RMG - 12-Month ML Forecast Explainer</title>
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --midnight:   #19105B;
+      --trypan:     #3411A3;
+      --rose:       #FF6196;
+      --turquoise:  #71EAE1;
+      --lightblue:  #26D4F0;
+      --amethyst:   #A16BDB;
+      --berry:      #A6265E;
+      --emerald:    #16978E;
+      --grey-light: #F2F2F2;
+      --grey-mid:   #D9D9D9;
+      --green:      #00B050;
+      --amber:      #FFC000;
+      --red:        #FF0000;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      color: var(--midnight);
+      background: #ffffff;
+      line-height: 1.6;
+    }
+
+    /* ── Page Header ──────────────────────────────────────── */
+    .page-header {
+      background: var(--midnight);
+      color: #ffffff;
+      padding: 40px 48px 32px;
+      border-bottom: 4px solid var(--rose);
+    }
+    .page-header .eyebrow {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--turquoise);
+      margin-bottom: 8px;
+    }
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: bold;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+    .page-header p {
+      font-size: 13px;
+      color: var(--grey-mid);
+      max-width: 640px;
+    }
+
+    /* ── Layout ───────────────────────────────────────────── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 40px 48px; }
+
+    /* ── Section titles ───────────────────────────────────── */
+    .section-title {
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--midnight);
+      margin: 48px 0 20px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--rose);
+    }
+
+    /* ── Cards grid ───────────────────────────────────────── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .card {
+      border: 1px solid var(--grey-mid);
+      background: #ffffff;
+    }
+
+    .card-header {
+      background: var(--midnight);
+      color: #ffffff;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .card-header .card-number {
+      background: var(--rose);
+      color: #ffffff;
+      font-weight: bold;
+      font-size: 13px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .card-header h2 {
+      font-size: 15px;
+      font-weight: bold;
+      color: #ffffff;
+    }
+    .card-body { padding: 20px; }
+
+
+    /* ── Sub-labels ───────────────────────────────────────── */
+    .sub-label {
+      font-size: 11px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--trypan);
+      margin: 16px 0 6px;
+    }
+    .sub-label:first-child { margin-top: 0; }
+
+    /* ── Pill badges ──────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: bold;
+      padding: 3px 10px;
+      margin: 2px 4px 2px 0;
+    }
+    .badge-primary   { background: var(--trypan);    color: #ffffff; }
+    .badge-rose      { background: var(--rose);      color: #ffffff; }
+    .badge-turquoise { background: var(--turquoise); color: var(--midnight); }
+    .badge-grey      { background: var(--grey-light);color: var(--midnight); border: 1px solid var(--grey-mid); }
+    .badge-emerald   { background: var(--emerald);   color: #ffffff; }
+
+    /* ── Formula blocks ───────────────────────────────────── */
+    .formula {
+      background: var(--grey-light);
+      border-left: 3px solid var(--trypan);
+      padding: 12px 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: var(--midnight);
+      margin: 8px 0;
+      white-space: pre-wrap;
+    }
+
+    /* ── Callout boxes ────────────────────────────────────── */
+    .callout {
+      background: var(--rose);
+      color: #ffffff;
+      padding: 12px 16px;
+      margin: 12px 0;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .callout-turquoise {
+      background: var(--turquoise);
+      color: var(--midnight);
+      padding: 12px 16px;
+      margin: 12px 0;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    /* ── Tables ───────────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 12px;
+    }
+    thead tr {
+      background: var(--midnight);
+      color: #ffffff;
+    }
+    thead th {
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--rose);
+    }
+    tbody td {
+      padding: 9px 12px;
+      color: var(--midnight);
+    }
+    tbody td:first-child { font-weight: bold; }
+
+    /* ── P-band explainer row ─────────────────────────────── */
+    .pband-row {
+      display: flex;
+      gap: 12px;
+      margin: 10px 0;
+    }
+    .pband-box {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+    }
+    .pband-box .pband-label {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .pband-box .pband-desc {
+      font-size: 11px;
+    }
+    .pband-p10 { background: var(--grey-light); border: 1px solid var(--grey-mid); color: var(--midnight); }
+    .pband-p50 { background: var(--trypan);     color: #ffffff; }
+    .pband-p90 { background: var(--midnight);   color: #ffffff; }
+
+    /* ── MAPE callout ─────────────────────────────────────── */
+    .mape-highlight {
+      background: var(--midnight);
+      color: #ffffff;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin: 12px 0;
+    }
+    .mape-number {
+      font-size: 32px;
+      font-weight: bold;
+      color: var(--turquoise);
+      white-space: nowrap;
+    }
+    .mape-desc { font-size: 12px; color: var(--grey-mid); }
+
+    /* ── Flow diagram ─────────────────────────────────────── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 12px 0;
+    }
+    .flow-step {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+    }
+    .flow-connector {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 32px;
+      flex-shrink: 0;
+    }
+    .flow-connector .dot {
+      width: 12px;
+      height: 12px;
+      background: var(--rose);
+      flex-shrink: 0;
+      margin-top: 16px;
+    }
+    .flow-connector .line {
+      width: 2px;
+      background: var(--grey-mid);
+      flex: 1;
+      margin: 2px auto 0;
+    }
+    .flow-step:last-child .flow-connector .line { display: none; }
+    .flow-content {
+      flex: 1;
+      padding: 10px 0 14px 8px;
+    }
+    .flow-content .flow-title {
+      font-weight: bold;
+      font-size: 12px;
+      color: var(--midnight);
+      margin-bottom: 3px;
+    }
+    .flow-content .flow-detail {
+      font-size: 12px;
+      color: #555;
+    }
+
+    /* ── Summary table section ────────────────────────────── */
+    .summary-section {
+      background: var(--grey-light);
+      border: 1px solid var(--grey-mid);
+      padding: 28px;
+      margin-top: 40px;
+    }
+    .summary-section h2 {
+      font-size: 18px;
+      font-weight: bold;
+      color: var(--midnight);
+      margin-bottom: 16px;
+    }
+
+    /* ── Footer ───────────────────────────────────────────── */
+    .page-footer {
+      background: var(--midnight);
+      color: var(--grey-mid);
+      padding: 20px 48px;
+      font-size: 11px;
+      margin-top: 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .page-footer strong { color: var(--turquoise); }
+  </style>
+</head>
+<body>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ PAGE HEADER -->
+<header class="page-header">
+  <div class="eyebrow">RMG Engine &mdash; Demand Forecasting</div>
+  <h1>12-Month ML Forecast &mdash; Complete Model Reference</h1>
+  <p>All five forecast cards explained: ML models used, P10 / P50 / P90 confidence bands, and MAPE accuracy scores.</p>
+</header>
+
+<div class="container">
+
+  <!-- ══════════════════════════════════════════ WHAT ARE P-BANDS -->
+  <div class="section-title">Understanding P10 / P50 / P90</div>
+
+  <div class="pband-row">
+    <div class="pband-box pband-p10">
+      <div class="pband-label">P10</div>
+      <div class="pband-desc"><strong>Pessimistic</strong><br>Only 10% chance result falls below this. Worst realistic scenario.</div>
+    </div>
+    <div class="pband-box pband-p50">
+      <div class="pband-label">P50</div>
+      <div class="pband-desc"><strong>Most Likely</strong><br>Model's best guess. 50% chance result is above or below this.</div>
+    </div>
+    <div class="pband-box pband-p90">
+      <div class="pband-label">P90</div>
+      <div class="pband-desc"><strong>Optimistic</strong><br>Only 10% chance result exceeds this. Best realistic scenario.</div>
+    </div>
+  </div>
+
+  <div class="callout-turquoise">
+    Think of it like a weather forecast: predicted 25°C (P50), could be as low as 18°C (P10), or as high as 32°C (P90). The actual always lands somewhere in that range.
+  </div>
+
+  <!-- ══════════════════════════════════════════ WHAT IS MAPE -->
+  <div class="section-title">Understanding MAPE</div>
+  <p style="margin-bottom:12px;">MAPE = <strong>Mean Absolute Percentage Error</strong> - the average % by which the model was wrong on historical data. Lower is better. Under 10% is considered good for revenue forecasting.</p>
+  <div class="formula">MAPE = mean( |actual − predicted| / actual ) × 100
+
+Example:  Actual = $5,000,000   |   Predicted = $4,780,000
+          Error  = |5M − 4.78M| / 5M  =  4.4%  ✓</div>
+
+  <!-- ══════════════════════════════════════════ THE 5 CARDS -->
+  <div class="section-title">The Five Forecast Cards</div>
+  <div class="cards-grid">
+
+
+    <!-- ─── CARD 1: REVENUE FORECAST ─── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-number">1</div>
+        <h2>Revenue Forecast</h2>
+      </div>
+      <div class="card-body">
+
+        <div class="sub-label">ML Models Used</div>
+        <span class="badge badge-primary">Holt's Damped Linear Trend</span>
+        <span class="badge badge-rose">Linear Regression</span>
+        <span class="badge badge-turquoise">Ensemble 60/40</span>
+
+        <div class="sub-label">How it works</div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 1 - Reconstruct Revenue</div>
+              <div class="flow-detail">No revenue table exists. Calculated from: Allocation % × Day Rate × Working Days per month across 30 months.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 2 - Calibrate with Actuals</div>
+              <div class="flow-detail">Real actuals for Jan–Jun 2026 loaded from Excel. Median ratio (actual ÷ reconstructed) applied as correction factor.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 3 - Model A: Holt (60%)</div>
+              <div class="flow-detail">Exponential smoothing with damped trend. Gives more weight to recent data. Trend slows over time - no runaway extrapolation.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 4 - Model B: Regression (40%)</div>
+              <div class="flow-detail">Linear Regression: Revenue = (w1 × headcount) + (w2 × time_index) + b. More staff = more capacity = more revenue.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 5 - Ensemble &amp; Confidence Bands</div>
+              <div class="flow-detail">Blend models 60/40. Apply residual std to compute P10/P50/P90, widening 8% per month out.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-label">Key Formulas</div>
+        <div class="formula">Ensemble  = 0.60 × Holt_forecast + 0.40 × Regression_forecast
+
+spread    = residual_std × (1.0 + 0.08 × month_index)
+
+P10 = P50 − 1.28 × spread
+P50 = Ensemble forecast
+P90 = P50 + 1.28 × spread</div>
+
+        <div class="sub-label">P10 / P50 / P90</div>
+        <span class="badge badge-primary">Yes - used</span>
+        <span class="badge badge-grey">Bands widen 8% per month</span>
+
+        <div class="sub-label">MAPE</div>
+        <div class="mape-highlight">
+          <div class="mape-number">4.4%</div>
+          <div class="mape-desc">Average error on 30-month training data. Excellent for revenue forecasting (anything under 10% is good).</div>
+        </div>
+
+        <div class="callout">Output: ~$59.4M/year, +71% YoY growth, P10/P50/P90 area chart</div>
+      </div>
+    </div>
+
+    <!-- ─── CARD 2: CLUSTER DECOMPOSITION ─── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-number">2</div>
+        <h2>Cluster Revenue Split</h2>
+      </div>
+      <div class="card-body">
+
+        <div class="sub-label">ML Models Used</div>
+        <span class="badge badge-grey">No ML model</span>
+        <span class="badge badge-primary">Weighted Arithmetic</span>
+        <span class="badge badge-rose">Exponential Decay Blending</span>
+
+        <div class="sub-label">How it works</div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 1 - Pipeline Cluster Weights</div>
+              <div class="flow-detail">For each month with pipeline deals, compute each cluster's share of total pipeline revenue.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 2 - Fallback for Empty Months</div>
+              <div class="flow-detail">Months with no pipeline data use exponential decay blending toward the long-run average weight.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 3 - Apply to Revenue</div>
+              <div class="flow-detail">Multiply total P50/P10/P90 from Card 1 by each cluster's weight to get cluster-level revenue.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-label">Key Formulas</div>
+        <div class="formula">Weight[cluster, month] = Pipeline_Rev[cluster] / Total_Pipeline_Rev
+
+Decay = e^(−0.3 × months_since_last_data)
+Blended_weight = Last_weight × Decay + Avg_weight × (1 − Decay)
+
+Cluster_P50 = Total_P50 × Cluster_Weight</div>
+
+        <div class="sub-label">P10 / P50 / P90</div>
+        <span class="badge badge-grey">Inherited from Card 1 - no independent bands</span>
+
+        <div class="sub-label">MAPE</div>
+        <span class="badge badge-grey">Not computed - distributes existing forecast, no independent prediction</span>
+
+        <div class="callout">Output: Stacked bar - 5 clusters × 12 months. Cluster 5 dominates at 34.7%</div>
+      </div>
+    </div>
+
+    <!-- ─── CARD 3: RESOURCE FTE ─── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-number">3</div>
+        <h2>Resource FTE by Role</h2>
+      </div>
+      <div class="card-body">
+
+        <div class="sub-label">ML Models Used</div>
+        <span class="badge badge-primary">Holt's Damped Trend (per role)</span>
+        <span class="badge badge-rose">Pipeline Demand Overlay</span>
+
+        <div class="sub-label">How it works</div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 1 - Historical FTE per Role</div>
+              <div class="flow-detail">18 months of monthly billable FTE queried for each of the top 15 canonical roles.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 2 - Holt Trend per Role</div>
+              <div class="flow-detail">Each role gets its own independent Holt damped trend forecast for 12 months.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 3 - Overlay Pipeline Demand</div>
+              <div class="flow-detail">Pipeline FTE (probability-weighted) added at 50% weight - conservative since it's new additive demand.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Step 4 - Hiring Gap</div>
+              <div class="flow-detail">Peak 12-month demand minus current supply at 80% utilisation target = how many to hire.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-label">Key Formulas</div>
+        <div class="formula">blended_FTE = max(0, holt_forecast + pipeline_FTE × 0.50)
+
+hiring_gap[role] = peak_demand_12m
+                 − (current_headcount[role] × 0.80)</div>
+
+        <div class="sub-label">P10 / P50 / P90</div>
+        <span class="badge badge-grey">Not used - single point estimate per role</span>
+
+        <div class="sub-label">MAPE</div>
+        <span class="badge badge-grey">Not computed - Holt used as smoother, not evaluated for accuracy</span>
+
+        <div class="callout">Output: Bar chart FTE by role × 12 months + hiring gap list (~420 FTE/month)</div>
+      </div>
+    </div>
+
+    <!-- ─── CARD 4: PROJECT VOLUME ─── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-number">4</div>
+        <h2>Project Volume Forecast</h2>
+      </div>
+      <div class="card-body">
+
+        <div class="sub-label">ML Models Used</div>
+        <span class="badge badge-primary">Holt-Winters Additive Seasonal</span>
+        <span class="badge badge-turquoise">90 months training data</span>
+
+        <div class="sub-label">How it works</div>
+        <p style="font-size:12px;margin:8px 0;">Most powerful model in the system - uses <strong>3 components</strong>:</p>
+
+        <table>
+          <thead>
+            <tr><th>Component</th><th>What it captures</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Level</td><td>Current baseline project count (~35/month)</td></tr>
+            <tr><td>Trend</td><td>Growing or shrinking over time?</td></tr>
+            <tr><td>Seasonality</td><td>Monthly patterns - Q1 surge, August dip, Q4 push</td></tr>
+          </tbody>
+        </table>
+
+        <p style="font-size:12px;margin:8px 0;">Uses <strong>90 months</strong> of data (Jan 2019 → Jun 2026) because detecting yearly seasonal patterns needs 2–3 complete annual cycles minimum.</p>
+
+        <div class="sub-label">Key Formulas</div>
+        <div class="formula">Model: Holt-Winters additive, period = 12
+
+spread = residual_std × (1.0 + 0.05 × month_index)
+
+P10 = max(1, round(forecast − 1.28 × spread))
+P50 = max(1, round(forecast))
+P90 = max(P50, round(forecast + 1.28 × spread))</div>
+
+        <div class="sub-label">P10 / P50 / P90</div>
+        <span class="badge badge-primary">Yes - used</span>
+        <span class="badge badge-grey">Bands widen 5% per month (gentler than revenue)</span>
+        <span class="badge badge-grey">Minimum 1 project always</span>
+
+        <div class="sub-label">MAPE</div>
+        <span class="badge badge-grey">Not reported - residual std used for bands only</span>
+
+        <div class="callout">Output: Bar chart with P10/P50/P90 - ~430 projects/year with seasonal pattern</div>
+      </div>
+    </div>
+
+    <!-- ─── CARD 5: COE GAP ─── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-number">5</div>
+        <h2>COE Supply / Demand Gap</h2>
+      </div>
+      <div class="card-body">
+
+        <div class="sub-label">ML Models Used</div>
+        <span class="badge badge-grey">No ML model</span>
+        <span class="badge badge-primary">Arithmetic Supply Projection</span>
+
+        <div class="sub-label">How it works</div>
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Supply Side</div>
+              <div class="flow-detail">Current COE headcount from employee_skills. Project forward using headcount growth trend minus attrition over time.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div><div class="line"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Demand Side</div>
+              <div class="flow-detail">Pipeline deals mapped to COE via role_mapping. FTE demand = deal allocation × probability weight.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-connector"><div class="dot"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Gap &amp; Hiring Recommendation</div>
+              <div class="flow-detail">Gap = Supply − Demand per month. Negative = shortfall. Peak shortfall = hiring needed.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-label">Key Formulas</div>
+        <div class="formula">projected_supply[month] =
+  current_available
+  + (monthly_hc_growth × coe_share × month)
+  × (1 − attrition_rate × month/12)
+
+demand[coe][month] = Σ (deal_FTE × deal_probability)
+
+gap = projected_supply − demand
+hiring_need[coe] = ceil(peak_demand − available_supply)</div>
+
+        <div class="sub-label">Attrition Rate</div>
+        <div class="formula">attrition_rate = resignations_last_12m / total_active_employees
+                   (default: 5% if data unavailable)</div>
+
+        <div class="sub-label">P10 / P50 / P90</div>
+        <span class="badge badge-grey">Not used - single gap value per COE per month</span>
+
+        <div class="sub-label">MAPE</div>
+        <span class="badge badge-grey">Not computed - supply/demand accounting, not a statistical forecast</span>
+
+        <div class="callout">Output: Bar chart gap per COE + hiring recommendations (~21 hires total)</div>
+      </div>
+    </div>
+
+  </div><!-- /cards-grid -->
+
+
+  <!-- ══════════════════════════════════════════ SUMMARY TABLE -->
+  <div class="summary-section">
+    <h2>Summary - All Five Cards at a Glance</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Card</th>
+          <th>ML Model</th>
+          <th>Training Data</th>
+          <th>P10/P50/P90</th>
+          <th>MAPE</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1 &mdash; Revenue</td>
+          <td>Holt (60%) + Linear Regression (40%)</td>
+          <td>30 months calibrated</td>
+          <td>Yes - widens 8%/month</td>
+          <td>4.4% ✓</td>
+        </tr>
+        <tr>
+          <td>2 &mdash; Cluster Split</td>
+          <td>Weighted arithmetic (pipeline %)</td>
+          <td>Live pipeline deals (229)</td>
+          <td>Inherited from Card 1</td>
+          <td>-</td>
+        </tr>
+        <tr>
+          <td>3 &mdash; Resource FTE</td>
+          <td>Holt per role + pipeline overlay</td>
+          <td>18 months FTE by role</td>
+          <td>No - point estimate</td>
+          <td>-</td>
+        </tr>
+        <tr>
+          <td>4 &mdash; Project Volume</td>
+          <td>Holt-Winters additive seasonal</td>
+          <td>90 months (Jan 2019+)</td>
+          <td>Yes - widens 5%/month</td>
+          <td>-</td>
+        </tr>
+        <tr>
+          <td>5 &mdash; COE Gap</td>
+          <td>Arithmetic supply/demand projection</td>
+          <td>Current headcount + pipeline</td>
+          <td>No - single gap value</td>
+          <td>-</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ══════════════════════════════════════════ DATA FLOW -->
+  <div class="section-title">End-to-End Data Flow</div>
+
+  <div style="background:var(--midnight);padding:28px;margin-bottom:40px;">
+    <div style="display:flex;flex-direction:column;gap:0;">
+
+      <div style="display:flex;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid #2d2060;">
+        <div style="background:var(--rose);color:#fff;font-weight:bold;font-size:11px;padding:4px 10px;min-width:130px;text-align:center;">ALLOCATIONS DB</div>
+        <div style="color:var(--grey-mid);font-size:12px;">Billable allocations × rate card × working days &rarr; 30-month revenue series</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid #2d2060;">
+        <div style="background:var(--trypan);color:#fff;font-weight:bold;font-size:11px;padding:4px 10px;min-width:130px;text-align:center;">CALIBRATE</div>
+        <div style="color:var(--grey-mid);font-size:12px;">Merge real actuals (Jan–Jun 2026 Excel) &rarr; calibration factor via median ratio</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid #2d2060;">
+        <div style="background:var(--trypan);color:#fff;font-weight:bold;font-size:11px;padding:4px 10px;min-width:130px;text-align:center;">PIPELINE DB</div>
+        <div style="color:var(--grey-mid);font-size:12px;">229 pipeline deals &rarr; prorate to monthly FTE/revenue/cluster/COE/role</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid #2d2060;">
+        <div style="background:var(--turquoise);color:var(--midnight);font-weight:bold;font-size:11px;padding:4px 10px;min-width:130px;text-align:center;">TRAIN (5.3s)</div>
+        <div style="color:var(--grey-mid);font-size:12px;">Revenue &rarr; Cluster &rarr; Resource &rarr; Project &rarr; COE Gap - all 5 models in sequence</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:16px;padding:10px 0;">
+        <div style="background:var(--rose);color:#fff;font-weight:bold;font-size:11px;padding:4px 10px;min-width:130px;text-align:center;">7 API ENDPOINTS</div>
+        <div style="color:var(--grey-mid);font-size:12px;">/api/forecast/ml/* &rarr; serialise JSON &rarr; 4-tab forecast page &rarr; charts &amp; tables</div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- ═══════════════════════════════════════════════════════════════ FOOTER -->
+<footer class="page-footer">
+  <div><strong>RMG Engine</strong> &mdash; AI-Powered Resource Management &mdash; JMan Group</div>
+  <div>Team Super Nova &mdash; Sathish &middot; Karthi &middot; Lejoy &middot; Rohit</div>
+</footer>
+
+</body>
+</html>

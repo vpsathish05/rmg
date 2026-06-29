@@ -38,3 +38,8 @@ logs/
 *.csv.bak
 *.xlsx.bak
 etl_output/
+video/output.mp4
+
+team-presentation-script.txt
+
+engine-presentation-script.txt

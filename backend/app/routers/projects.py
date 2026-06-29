@@ -88,7 +88,8 @@ def overrunning_projects(db: Session = Depends(get_db)):
         FROM projects p
         LEFT JOIN allocations a
             ON a.project_id = p.project_id
-            AND a.is_active = true AND a.is_active_version = true
+            AND a.is_active_version = true
+            AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         WHERE p.project_status = 'ACTIVE'
           AND p.is_active_version = true
           AND p.project_end_date IS NOT NULL
@@ -116,7 +117,7 @@ def ramp_down_projects(
     days: int = Query(60, description="Projects ending within this many days"),
     db: Session = Depends(get_db),
 ):
-    """Projects ending within N days — candidates for ramp-down planning."""
+    """Projects ending within N days - candidates for ramp-down planning."""
     rows = db.execute(text("""
         SELECT
             p.project_id,
@@ -129,7 +130,8 @@ def ramp_down_projects(
         FROM projects p
         LEFT JOIN allocations a
             ON a.project_id = p.project_id
-            AND a.is_active = true AND a.is_active_version = true
+            AND a.is_active_version = true
+            AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         WHERE p.project_status IN ('ACTIVE', 'DEAL WON')
           AND p.is_active_version = true
           AND p.project_end_date IS NOT NULL

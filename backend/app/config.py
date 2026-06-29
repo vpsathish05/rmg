@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     graph_tenant_id: str = ""
     graph_mailbox: str = "sathishkumar@jmangroup.com"
 
-    # Webhook base URL — must be public HTTPS in production; use ngrok locally
+    # Webhook base URL - must be public HTTPS in production; use ngrok locally
     webhook_base_url: str = "http://localhost:8000"
 
     # Azure Communication Services Email

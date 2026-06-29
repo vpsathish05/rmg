@@ -8,6 +8,19 @@ from app.schemas.employee import EmployeeAvailability, EmployeeAllocationDetail
 
 router = APIRouter()
 
+# The allocations table is populated in ~weekly segments per project, so a person's
+# current-week row can lag several days-to-weeks behind reality even after it starts.
+# Approved timesheet hours are the ground truth for "are they actually working right
+# now" - mirrors app/routers/dashboard.py's _RECENT_REAL_WORK.
+_RECENT_REAL_WORK = """EXISTS (
+        SELECT 1 FROM timesheets t
+        JOIN projects tp ON tp.project_id = t.project_id AND tp.is_active_version = true
+        WHERE t.employee_id = e.employee_id
+          AND t.date >= CURRENT_DATE - INTERVAL '30 days'
+          AND t.status = 'APPROVED'
+          AND LOWER(COALESCE(tp.type_of_project, '')) IN ('client project', 'managed services')
+    )"""
+
 
 def _alloc_status(pct: float) -> str:
     if pct == 0:
@@ -41,24 +54,28 @@ def list_employees(
     status: str = Query(None),
     db: Session = Depends(get_db),
 ):
-    rows = db.execute(text("""
+    rows = db.execute(text(f"""
         SELECT
             e.employee_id,
             e.job_name,
             e.canonical_role,
             e.department_name,
             e.location,
-            COALESCE(SUM(a.allocation_pct), 0) AS allocated_pct,
+            COALESCE(SUM(CASE WHEN LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+                               THEN a.allocation_pct ELSE 0 END), 0) AS allocated_pct,
             COUNT(CASE WHEN UPPER(a.resourcing_status) = 'SHADOW'   THEN 1 END) AS shadow_count,
             COUNT(CASE WHEN UPPER(a.resourcing_status) = 'UNBILLED'  THEN 1 END) AS unbilled_count,
             COUNT(CASE WHEN UPPER(a.resourcing_status) = 'BILLABLE'  THEN 1 END) AS billable_count,
             MIN(CASE WHEN a.end_date IS NOT NULL AND (a.is_open_ended = false OR a.is_open_ended IS NULL)
-                     THEN a.end_date END) AS nearest_end_date
+                     THEN a.end_date END) AS nearest_end_date,
+            {_RECENT_REAL_WORK} AS has_recent_real_work
         FROM employees e
         LEFT JOIN allocations a
             ON a.employee_id = e.employee_id
-            AND a.is_active = true
             AND a.is_active_version = true
+            AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+        LEFT JOIN projects p
+            ON p.project_id = a.project_id AND p.is_active_version = true
         WHERE e.account_status = true
           AND e.is_active_version = true
           AND e.date_of_resignation IS NULL
@@ -70,6 +87,10 @@ def list_employees(
     result = []
     for r in rows:
         allocated = float(r.allocated_pct or 0)
+        if allocated == 0.0 and r.has_recent_real_work:
+            # Allocation record hasn't caught up yet, but timesheets show real work
+            # in progress - treat as fully engaged rather than falsely "On Bench".
+            allocated = 100.0
         available = max(0.0, 100.0 - allocated)
         st = _alloc_status(allocated)
         if department and (r.department_name or "").lower() != department.lower():
@@ -117,8 +138,8 @@ def employee_allocations(employee_id: str, db: Session = Depends(get_db)):
             ON p.project_id = a.project_id
             AND p.is_active_version = true
         WHERE a.employee_id = :eid
-          AND a.is_active = true
           AND a.is_active_version = true
+          AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         ORDER BY a.end_date ASC NULLS LAST, a.project_id
     """), {"eid": employee_id}).fetchall()
 

@@ -14,7 +14,8 @@ def network(db: Session = Depends(get_db)):
         SELECT p.project_id, p.client_id, p.proposition_coe, p.project_start_date, p.project_end_date,
                COUNT(DISTINCT a.employee_id) AS team_size
         FROM projects p
-        JOIN allocations a ON a.project_id = p.project_id AND a.is_active_version = true AND a.is_active = true
+        JOIN allocations a ON a.project_id = p.project_id AND a.is_active_version = true
+          AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         WHERE p.is_active_version = true AND UPPER(p.project_status) = 'ACTIVE'
           AND p.client_id != 'CLIENT_127'
         GROUP BY p.project_id, p.client_id, p.proposition_coe, p.project_start_date, p.project_end_date
@@ -42,9 +43,11 @@ def network(db: Session = Depends(get_db)):
                COUNT(DISTINCT a1.employee_id) AS shared
         FROM allocations a1
         JOIN allocations a2 ON a1.employee_id = a2.employee_id
-          AND a2.is_active = true AND a2.is_active_version = true
+          AND a2.is_active_version = true
+          AND a2.start_date <= CURRENT_DATE AND (a2.end_date IS NULL OR a2.end_date >= CURRENT_DATE)
           AND a1.project_id < a2.project_id
-        WHERE a1.is_active = true AND a1.is_active_version = true
+        WHERE a1.is_active_version = true
+          AND a1.start_date <= CURRENT_DATE AND (a1.end_date IS NULL OR a1.end_date >= CURRENT_DATE)
           AND a1.project_id = ANY(:ids) AND a2.project_id = ANY(:ids)
         GROUP BY a1.project_id, a2.project_id
         HAVING COUNT(DISTINCT a1.employee_id) >= 2
@@ -72,7 +75,8 @@ def timeline(project_id: str, db: Session = Depends(get_db)):
                a.allocation_pct, a.resourcing_status
         FROM allocations a
         JOIN employees e ON e.employee_id = a.employee_id AND e.is_active_version = true
-        WHERE a.project_id = :pid AND a.is_active_version = true AND a.is_active = true
+        WHERE a.project_id = :pid AND a.is_active_version = true
+          AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         ORDER BY a.start_date, e.canonical_role
     """), {"pid": project_id}).fetchall()
 
@@ -162,7 +166,8 @@ def top_projects_and_resources(db: Session = Depends(get_db)):
         SELECT p.project_id, p.client_id, p.proposition_coe, p.project_start_date, p.project_end_date,
                COUNT(DISTINCT a.employee_id) AS team_size
         FROM projects p
-        JOIN allocations a ON a.project_id = p.project_id AND a.is_active_version = true AND a.is_active = true
+        JOIN allocations a ON a.project_id = p.project_id AND a.is_active_version = true
+          AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         WHERE p.is_active_version = true AND UPPER(p.project_status) = 'ACTIVE' AND p.client_id != 'CLIENT_127'
         GROUP BY p.project_id, p.client_id, p.proposition_coe, p.project_start_date, p.project_end_date
         ORDER BY COUNT(DISTINCT a.employee_id) DESC
@@ -174,7 +179,8 @@ def top_projects_and_resources(db: Session = Depends(get_db)):
                COUNT(DISTINCT a.project_id) AS project_count,
                COALESCE(SUM(a.allocation_pct), 0) AS total_alloc
         FROM employees e
-        JOIN allocations a ON a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true
+        JOIN allocations a ON a.employee_id = e.employee_id AND a.is_active_version = true
+          AND a.start_date <= CURRENT_DATE AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         WHERE e.account_status = true AND e.is_active_version = true AND e.date_of_resignation IS NULL
           AND e.job_name IS NOT NULL
         GROUP BY e.employee_id, e.job_name, e.canonical_role, e.location

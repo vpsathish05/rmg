@@ -1,5 +1,5 @@
 """
-Build employee_leave_weeks table — detect probable leave from timesheet low-activity weeks.
+Build employee_leave_weeks table - detect probable leave from timesheet low-activity weeks.
 
 Run: PYTHONPATH=. python -m etl.build_leave
 

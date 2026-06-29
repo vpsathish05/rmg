@@ -1,4 +1,4 @@
-"""OpenAI integration — generates recommendation rationale per candidate."""
+"""OpenAI integration - generates recommendation rationale per candidate."""
 from __future__ import annotations
 import asyncio
 from openai import AsyncOpenAI
@@ -29,7 +29,7 @@ async def generate_rationale(candidate: CandidateScore, req: RecommendRequest) -
         if req.skills_required
         else ""
     )
-    prompt = f"""You are the Resource Management Group (RMG) assistant at JMan Group, a consulting firm.
+    prompt = f"""You are the Resource Management Group (RMG) assistant at Jman Group, a consulting firm.
 
 Evaluate this candidate for a resource request. Write 2-3 concise, factual sentences.
 Focus on: skill fit for the requested technology, availability, and any capacity concerns.
@@ -74,7 +74,7 @@ async def generate_rationales_batch(
         for c, r in zip(top, rationales):
             c.rationale = r if isinstance(r, str) else None
     except Exception:
-        pass  # rationales are optional — don't fail the whole request
+        pass  # rationales are optional - don't fail the whole request
     return candidates
 
 
@@ -99,7 +99,7 @@ async def rerank_candidates(
 
     candidate_lines = "\n".join(_fmt_line(i, c) for i, c in enumerate(top))
 
-    prompt = f"""You are the RMG (Resource Management Group) AI at JMan Group.
+    prompt = f"""You are the RMG (Resource Management Group) AI at Jman Group.
 
 Re-rank these {len(top)} candidates for best fit to this role. Consider:
 - Skill alignment with required skills (most important)
@@ -166,7 +166,7 @@ async def generate_smart_hire_signal(
             for c in top_stretch[:3]
         )
 
-    prompt = f"""You are the RMG AI at JMan Group consulting firm.
+    prompt = f"""You are the RMG AI at Jman Group consulting firm.
 
 No internal candidate is available for this role. Generate a concise, actionable hire recommendation (3-4 sentences).
 
@@ -194,6 +194,6 @@ Reply with ONLY the hire recommendation. Be specific and actionable."""
     except Exception:
         return (
             f"No internal candidate available for '{req.role_code}' in {req.coe}. "
-            f"{total_evaluated} evaluated — all at capacity or lack required skills. "
+            f"{total_evaluated} evaluated - all at capacity or lack required skills. "
             f"Consider external hire or adjacent COE redeployment."
         )

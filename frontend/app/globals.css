@@ -97,14 +97,14 @@
 
   --radius: 0.5rem;
 
-  /* Charts — full brand palette */
+  /* Charts - full brand palette */
   --chart-1: #3411A3;   /* trypan blue */
   --chart-2: #26D4F0;   /* light blue */
   --chart-3: #FF6196;   /* rose */
   --chart-4: #A16BDB;   /* amethyst */
   --chart-5: #71EAE1;   /* turquoise */
 
-  /* Sidebar — midnight blue */
+  /* Sidebar - midnight blue */
   --sidebar:                    #19105B;
   --sidebar-foreground:         rgba(255,255,255,0.65);
   --sidebar-primary:            #71EAE1;            /* turquoise active text */

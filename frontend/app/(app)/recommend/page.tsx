@@ -47,8 +47,8 @@ function CandidateRow({ c, rank }: { c: Candidate; rank: number }) {
       <TableRow className="hover:bg-muted/30">
         <TableCell className="text-xs text-muted-foreground tabular-nums">{rank}</TableCell>
         <TableCell className="font-mono text-xs text-muted-foreground">{c.employee_id}</TableCell>
-        <TableCell className="text-sm">{c.job_name ?? "—"}</TableCell>
-        <TableCell className="text-xs text-muted-foreground">{c.location ?? "—"}</TableCell>
+        <TableCell className="text-sm">{c.job_name ?? "-"}</TableCell>
+        <TableCell className="text-xs text-muted-foreground">{c.location ?? "-"}</TableCell>
         <TableCell className="text-center tabular-nums text-sm">
           <span style={{ color: c.available_pct > 0 ? "#3411A3" : undefined }} className={c.available_pct > 0 ? "font-semibold" : "text-muted-foreground"}>
             {c.available_pct.toFixed(0)}%
@@ -64,7 +64,7 @@ function CandidateRow({ c, rank }: { c: Candidate; rank: number }) {
         <TableCell className="w-24">
           {s.competency != null
             ? <ScoreBar value={s.competency} color="#F59E0B" />
-            : <span className="text-xs text-muted-foreground/40">—</span>}
+            : <span className="text-xs text-muted-foreground/40">-</span>}
         </TableCell>
         <TableCell className="w-24"><ScoreBar value={s.availability} color="#10B981" /></TableCell>
         <TableCell className="w-24"><ScoreBar value={s.productivity} color="#F97316" /></TableCell>
@@ -224,7 +224,7 @@ function RecommendPageInner() {
             {result.role_info && (
               <p className="text-xs text-muted-foreground mb-3">
                 <span className="font-medium text-foreground">{result.role_info.raw_code}</span>
-                {" → "}{result.role_info.canonical_roles?.join(", ") ?? "—"}
+                {" → "}{result.role_info.canonical_roles?.join(", ") ?? "-"}
                 {" · "}{candidates.length} candidates · AI rationale for top 10
               </p>
             )}

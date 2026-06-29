@@ -1,4 +1,4 @@
-"""Knowledge Base — build project embeddings and search similar past work as proof."""
+"""Knowledge Base - build project embeddings and search similar past work as proof."""
 from __future__ import annotations
 import asyncio
 from sqlalchemy.orm import Session
@@ -45,7 +45,7 @@ def _build_summary(row) -> str:
 
 async def build_all(db: Session, batch_size: int = 50) -> int:
     """Embed all projects that have allocations. Returns count of upserted rows."""
-    # Step 1: projects + team roles (lightweight — no huge tables)
+    # Step 1: projects + team roles (lightweight - no huge tables)
     rows = db.execute(text("""
         SELECT
             p.project_id, p.client_id, p.proposition_coe, p.type_of_project,
@@ -68,7 +68,7 @@ async def build_all(db: Session, batch_size: int = 50) -> int:
     if not rows:
         return 0
 
-    # Step 2: fetch WSR health per project (separate query — no cross join)
+    # Step 2: fetch WSR health per project (separate query - no cross join)
     proj_ids = [r.project_id for r in rows]
     health_rows = db.execute(text("""
         SELECT project_id,
@@ -98,7 +98,7 @@ async def build_all(db: Session, batch_size: int = 50) -> int:
         texts = [s for _, s in batch]
         embeddings = await _embed(texts)
         for (r, summary), emb in zip(batch, embeddings):
-            # Upsert — delete existing then insert
+            # Upsert - delete existing then insert
             db.execute(text(
                 "DELETE FROM project_embeddings WHERE project_id = :pid"
             ), {"pid": r.project_id})
@@ -118,7 +118,7 @@ async def search_employee_proofs(
     query_text: str,
     limit: int = 2,
 ) -> list[dict]:
-    """Return similar past projects this employee worked on — used as recommendation proof."""
+    """Return similar past projects this employee worked on - used as recommendation proof."""
     # Check if any embeddings exist
     count = db.execute(text("SELECT COUNT(*) FROM project_embeddings")).scalar()
     if not count:
@@ -184,6 +184,38 @@ async def compute_semantic_skill_scores(
             FROM employee_skill_embeddings
             WHERE employee_id = ANY(:ids)
         """), {"vec": str(vec), "ids": employee_ids}).fetchall()
+        return {r.employee_id: max(0.0, float(r.similarity)) for r in rows}
+    except Exception:
+        return {}
+
+
+async def compute_semantic_skill_scores_ann(
+    db: Session,
+    role_text: str,
+    top_k: int = 50,
+) -> dict[str, float]:
+    """Use pgvector ANN index to find top-K most semantically similar employees.
+
+    Instead of scanning all employee embeddings, leverages the IVFFlat index
+    to return only the nearest neighbors - O(√N) vs O(N).
+    Returns {employee_id: similarity_score (0-1)}.
+    """
+    if not role_text.strip():
+        return {}
+
+    count = db.execute(text("SELECT COUNT(*) FROM employee_skill_embeddings")).scalar()
+    if not count:
+        return {}
+
+    try:
+        vec = (await _embed([role_text]))[0]
+        rows = db.execute(text("""
+            SELECT employee_id,
+                   ROUND((1 - (embedding <=> CAST(:vec AS vector)))::numeric, 4) AS similarity
+            FROM employee_skill_embeddings
+            ORDER BY embedding <=> CAST(:vec AS vector)
+            LIMIT :k
+        """), {"vec": str(vec), "k": top_k}).fetchall()
         return {r.employee_id: max(0.0, float(r.similarity)) for r in rows}
     except Exception:
         return {}

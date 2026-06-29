@@ -60,7 +60,7 @@ function DrillDownRow({ employeeId }: { employeeId: string }) {
             {a.client_id && <span className="ml-2 text-xs text-muted-foreground/70">({a.client_id})</span>}
           </TableCell>
           <TableCell colSpan={2} className="text-xs text-muted-foreground">
-            {a.start_date ?? "—"} → {a.is_open_ended ? "Open ended" : (a.end_date ?? "—")}
+            {a.start_date ?? "-"} → {a.is_open_ended ? "Open ended" : (a.end_date ?? "-")}
             {a.days_remaining != null && !a.is_open_ended && (
               <span className={`ml-2 font-medium ${a.days_remaining <= 14 ? "text-red-600" : a.days_remaining <= 30 ? "text-amber-600" : "text-muted-foreground"}`}>
                 ({a.days_remaining}d left)
@@ -68,7 +68,7 @@ function DrillDownRow({ employeeId }: { employeeId: string }) {
             )}
           </TableCell>
           <TableCell className="text-right tabular-nums text-xs text-muted-foreground">
-            {a.allocation_pct != null ? `${a.allocation_pct.toFixed(0)}%` : "—"}
+            {a.allocation_pct != null ? `${a.allocation_pct.toFixed(0)}%` : "-"}
           </TableCell>
           <TableCell />
           <TableCell>
@@ -201,8 +201,8 @@ export default function AvailabilityPage() {
                         )}
                       </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">{e.employee_id}</TableCell>
-                      <TableCell className="text-sm">{e.job_name ?? "—"}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{e.department_name ?? "—"}</TableCell>
+                      <TableCell className="text-sm">{e.job_name ?? "-"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{e.department_name ?? "-"}</TableCell>
                       <TableCell className="text-right tabular-nums text-sm">{e.allocated_pct.toFixed(0)}%</TableCell>
                       <TableCell className="text-right tabular-nums text-sm font-semibold" style={{ color: e.available_pct > 0 ? "#3411A3" : undefined }}>
                         {e.available_pct.toFixed(0)}%
@@ -212,7 +212,7 @@ export default function AvailabilityPage() {
                           <Badge variant="outline" className={`text-xs ${BILL_STYLE[e.billability] ?? "bg-muted text-muted-foreground"}`}>
                             {e.billability}
                           </Badge>
-                        ) : <span className="text-xs text-muted-foreground/40">—</span>}
+                        ) : <span className="text-xs text-muted-foreground/40">-</span>}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`text-xs ${STATUS_STYLE[e.allocation_status]}`}>
