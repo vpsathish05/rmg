@@ -994,146 +994,99 @@ function ChangeRequestCard({ r }: { r: { id: string; source_email: string | null
   const [expanded, setExpanded] = useState(false);
   const [recEntry, setRecEntry] = useState<CacheEntry | undefined>(undefined);
   const loadedRef = useRef(false);
-
-  const parsed = r.parsed_json ?? {};
-  const changeType = (parsed.change_type as string) || "";
-  const isReplace = changeType.toLowerCase() === "replace" || r.request_type === "CHANGE";
-  const roleCode = (parsed.role as string) || (parsed.change_details as string)?.match(/Senior Software Engineer|SSE|Developer|Analyst|Consultant|Engineer|Manager|Lead/i)?.[0] || "Unknown";
+  const parsed = (r.parsed_json ?? {}) as Record<string, string>;
+  const isExtend = r.request_type === "EXTEND";
 
   const loadRecommendation = useCallback(async () => {
-    if (loadedRef.current) return;
+    if (loadedRef.current || !isExtend) return;
     loadedRef.current = true;
     setRecEntry({ status: "loading" });
     try {
-      const canonicalRole = roleCode !== "Unknown" ? roleCode : null;
+      const role = parsed.role || parsed.canonical_role || "Solutions Enabler";
       const params = new URLSearchParams();
-      if (canonicalRole) params.append("canonical_roles", canonicalRole);
+      params.append("canonical_roles", role);
       const { data: coeData } = await api.get(`/api/rmg/auto-coe?${params.toString()}`);
-      const coe: string | null = coeData.coe;
-      if (!coe) { setRecEntry({ status: "error" }); return; }
+      const coe: string | null = coeData.coe || parsed.coe || "Data Engineering";
       const { data } = await api.post("/api/rmg/recommend-role", {
-        role_code: roleCode,
-        canonical_roles: canonicalRole ? [canonicalRole] : [],
-        coe,
-        allocation_pct: 100,
-        required_skills: null,
-        with_rationale: true,
-        with_kb_proof: true,
+        role_code: role, canonical_roles: [role], coe,
+        allocation_pct: Number(parsed.allocation_pct) || 100,
+        required_skills: parsed.required_skills || null,
+        with_rationale: false, with_kb_proof: true,
       });
-      setRecEntry({ status: "done", coe, data });
-    } catch {
-      setRecEntry({ status: "error" });
-      loadedRef.current = false;
-    }
-  }, [roleCode]);
+      setRecEntry({ status: "done", coe: coe || undefined, data });
+    } catch { setRecEntry({ status: "error" }); loadedRef.current = false; }
+  }, [isExtend, parsed]);
 
   const handleToggle = () => {
-    if (!expanded && isReplace) loadRecommendation();
+    if (!expanded && isExtend) loadRecommendation();
     setExpanded(!expanded);
   };
 
   return (
-    <div className={`border rounded-2xl overflow-hidden transition-all ${expanded ? "border-violet-200 shadow-sm" : "border-gray-100 hover:border-gray-200"}`}>
-      <div className="flex items-center gap-3 px-5 py-4 cursor-pointer" onClick={handleToggle}>
-        {expanded ? <ChevronDown className="w-4 h-4 text-violet-500 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-          r.request_type === "CHANGE" ? "bg-orange-50 text-orange-600 border border-orange-100" : "bg-violet-50 text-violet-600 border border-violet-100"
-        }`}>{r.request_type}</span>
-        <span className="text-xs text-gray-600">{r.source_email}</span>
-        {parsed.client_name ? <span className="text-xs font-semibold text-gray-900">{String(parsed.client_name)}</span> : null}
-        {isReplace && (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">Replace</span>
-        )}
-        <span className="text-xs text-gray-400 ml-auto">{r.received_at ? new Date(r.received_at).toLocaleDateString() : "—"}</span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">{r.status}</span>
+    <div className={`border rounded-2xl overflow-hidden transition-all ${expanded ? "shadow-sm" : "hover:border-gray-200"}`} style={{ borderColor: expanded ? "#19105B30" : undefined }}>
+      <div className="flex items-center gap-3 px-5 py-3.5 cursor-pointer" onClick={handleToggle}>
+        {expanded ? <ChevronDown className="w-4 h-4 shrink-0" style={{ color: "#19105B" }} /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: isExtend ? "#19105B0f" : "#FF61960f", color: isExtend ? "#19105B" : "#FF6196", border: `1px solid ${isExtend ? "#19105B30" : "#FF619630"}` }}>{r.request_type}</span>
+        <span className="text-xs text-gray-500">{r.source_email}</span>
+        {parsed.client_name && <span className="text-xs font-bold" style={{ color: "#19105B" }}>{parsed.client_name}</span>}
+        {parsed.project_id && <span className="text-[10px] font-mono text-gray-400">{parsed.project_id}</span>}
+        <span className="text-xs text-gray-400 ml-auto">{r.received_at ? new Date(r.received_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: r.status === "PARSED" ? "#19105B10" : "#FFC00020", color: r.status === "PARSED" ? "#19105B" : "#d97706" }}>{r.status}</span>
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-100">
-          {/* Parsed details */}
-          {r.parsed_json && (
-            <div className="px-5 py-3">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-                {Object.entries(r.parsed_json).filter(([k]) => k !== "change_details").map(([k, v]) => (
-                  <div key={k} className="flex items-center gap-2">
-                    <span className="text-gray-400 font-medium min-w-[120px]">{k.replace(/_/g, " ")}</span>
-                    <span className="text-gray-700 font-medium truncate">{String(v ?? "—")}</span>
-                  </div>
-                ))}
+        <div className="border-t px-5 py-4 space-y-3" style={{ borderColor: "#19105B10" }}>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              ["Request Type", parsed.request_type || parsed.req_type],
+              ["Urgency", parsed.urgency],
+              ["Client", parsed.client_name],
+              ["Project Code", parsed.project_id || parsed.project_code],
+              ["COE", parsed.coe],
+              ["Employee", parsed.employee_name || parsed.alloc_1_email],
+              ["Role", parsed.role || parsed.canonical_role],
+              ["Current Allocation", parsed.current_allocation_pct || parsed.alloc_1_current],
+              ["New Allocation", parsed.new_allocation_pct || parsed.alloc_1_new],
+              ["Start Date", parsed.start_date],
+              ["End Date", parsed.end_date || parsed.new_end_date],
+              ["Reporting To", parsed.reporting_to],
+              ["EM Lead", parsed.delivery_em_lead],
+            ].filter(([, v]) => v && String(v).trim() && String(v) !== "nan").map(([label, value]) => (
+              <div key={String(label)} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{String(label)}</p>
+                <p className="text-xs font-medium mt-0.5" style={{ color: "#19105B" }}>{String(value)}</p>
               </div>
-              {parsed.change_details ? (
-                <p className="text-xs text-gray-600 mt-3 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100 leading-relaxed">
-                  {String(parsed.change_details)}
-                </p>
-              ) : null}
+            ))}
+          </div>
+
+          {(parsed.change_details || parsed.scope_notes || parsed.comments) && (
+            <div className="rounded-lg px-3 py-2.5 border" style={{ background: "#19105B05", borderColor: "#19105B15" }}>
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Notes</p>
+              <p className="text-xs leading-relaxed" style={{ color: "#19105B" }}>{parsed.change_details || parsed.scope_notes || parsed.comments}</p>
             </div>
           )}
 
-          {/* Recommendation panel */}
-          {isReplace && (
-            <div className="px-5 pb-5 pt-2">
+          {/* AI Recommendations for EXTEND only */}
+          {isExtend && (
+            <div className="pt-2">
               <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-                <span className="text-xs font-semibold text-gray-900">AI Recommendations</span>
-                {recEntry?.coe && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{recEntry.coe}</span>}
+                <Sparkles className="w-3.5 h-3.5" style={{ color: "#19105B" }} />
+                <span className="text-xs font-semibold" style={{ color: "#19105B" }}>AI Replacement Recommendations</span>
+                {recEntry?.coe && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#19105B10", color: "#19105B" }}>{recEntry.coe}</span>}
               </div>
-
               {!recEntry || recEntry.status === "loading" ? (
-                <div className="flex items-center gap-3 py-8 justify-center text-gray-400">
-                  <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
-                  <span className="text-sm font-medium">Scoring candidates…</span>
-                </div>
+                <div className="flex items-center gap-3 py-6 justify-center text-gray-400"><Loader2 className="w-4 h-4 animate-spin" /> Scoring candidates…</div>
               ) : recEntry.status === "error" ? (
-                <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-50 border border-red-100">
-                  <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-red-800">Could not load recommendations</p>
-                    <button onClick={() => { loadedRef.current = false; loadRecommendation(); }}
-                      className="text-xs text-red-600 hover:text-red-800 font-medium mt-1 flex items-center gap-1">
-                      <RefreshCw className="w-3 h-3" /> Retry
-                    </button>
-                  </div>
-                </div>
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs text-red-700"><AlertTriangle className="w-3.5 h-3.5" /> Could not load recommendations</div>
               ) : recEntry.data ? (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span className="flex items-center gap-1.5" style={{ color: "#19105B" }}>
-                      <CheckCircle2 className="w-3.5 h-3.5" /><span className="font-semibold">{recEntry.data.available.length}</span> available
-                    </span>
-                    <span className="flex items-center gap-1.5" style={{ color: "#FF6196" }}>
-                      <Sparkles className="w-3.5 h-3.5" /><span className="font-semibold">{recEntry.data.best_match.length}</span> best match
-                    </span>
-                    <span className="text-gray-300">|</span>
-                    <span>{recEntry.data.total_evaluated} evaluated</span>
+                    <span style={{ color: "#19105B" }}><CheckCircle2 className="w-3.5 h-3.5 inline" /> {recEntry.data.available.length} available</span>
+                    <span style={{ color: "#FF6196" }}><Sparkles className="w-3.5 h-3.5 inline" /> {recEntry.data.best_match.length} best match</span>
+                    <span className="text-gray-300">|</span><span>{recEntry.data.total_evaluated} evaluated</span>
                   </div>
-
-                  {recEntry.data.available.length > 0 && (
-                    <section className="space-y-2">
-                      <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "#19105B" }}>
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Available ({recEntry.data.available.length})
-                      </p>
-                      {recEntry.data.available.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="Available" />)}
-                    </section>
-                  )}
-
-                  {recEntry.data.best_match.length > 0 && (
-                    <section className="space-y-2">
-                      <p className="text-xs font-semibold flex items-center gap-1.5" style={{ color: "#FF6196" }}>
-                        <Sparkles className="w-3.5 h-3.5" /> Best Match ({recEntry.data.best_match.length})
-                      </p>
-                      {recEntry.data.best_match.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="BestMatch" />)}
-                    </section>
-                  )}
-
-                  {recEntry.data.no_resource && (
-                    <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-100">
-                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-semibold text-amber-900">No Resource — Hire Signal</p>
-                        <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">{recEntry.data.hire_signal}</p>
-                      </div>
-                    </div>
-                  )}
+                  {recEntry.data.available.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="Available" />)}
+                  {recEntry.data.best_match.map((c, i) => <CandidateCard key={c.employee_id} candidate={c} rank={i+1} category="BestMatch" />)}
                 </div>
               ) : null}
             </div>
@@ -1147,7 +1100,7 @@ function ChangeRequestCard({ r }: { r: { id: string; source_email: string | null
 function ChangesView() {
   const { data: requests = [], isLoading } = useRmgEmailRequests();
   const queryClient = useQueryClient();
-  const changes = requests.filter(r => r.request_type === "CHANGE" || r.request_type === "NEW");
+  const changes = requests.filter(r => r.request_type === "CHANGE" || r.request_type === "NEW" || r.request_type === "EXTEND");
   const [processing, setProcessing] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
 

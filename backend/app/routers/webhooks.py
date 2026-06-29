@@ -38,7 +38,7 @@ async def _process_notification(message_id: str, db: Session) -> None:
         return
 
     subject: str = msg.get("subject", "")
-    if not subject.lower().startswith("resource request"):
+    if not any(kw in subject.lower() for kw in ("resource request", "extension request")):
         return
 
     body_content = (msg.get("body") or {}).get("content", "")
@@ -78,6 +78,11 @@ async def _process_notification(message_id: str, db: Session) -> None:
     request_type_raw = (parsed or {}).get("request_type", "NEW")
     request_type = request_type_raw if request_type_raw in ("EXTEND", "CHANGE", "NEW") else "NEW"
 
+    # Skip if parsed data has no meaningful content (blank form)
+    if parsed and not any(parsed.get(k) for k in ("client_name", "role", "employee_name", "project_id", "project_code")):
+        log.info("Skipping %s — no meaningful data extracted (blank form?)", message_id)
+        return
+
     # Store in email_requests
     db.execute(text("""
         INSERT INTO email_requests
@@ -104,10 +109,9 @@ async def _process_notification(message_id: str, db: Session) -> None:
 
 
 async def _extract_pdf_from_email(tenant: str, client_id: str, client_secret: str, mailbox: str, message_id: str) -> str | None:
-    """Download PDF attachment and extract text."""
+    """Download PDF attachment and extract text + form field values."""
     import base64
     import io
-    import pdfplumber
     from app.services.graph import get_attachments
 
     attachments = await get_attachments(tenant, client_id, client_secret, mailbox, message_id)
@@ -115,6 +119,27 @@ async def _extract_pdf_from_email(tenant: str, client_id: str, client_secret: st
         name = (att.get("name") or "").lower()
         if name.endswith(".pdf") and att.get("contentBytes"):
             pdf_bytes = base64.b64decode(att["contentBytes"])
+
+            # Try PyPDF2 form fields first (for editable PDFs)
+            try:
+                from PyPDF2 import PdfReader
+                reader = PdfReader(io.BytesIO(pdf_bytes))
+                fields = reader.get_fields()
+                if fields:
+                    field_data = {}
+                    for k, field in fields.items():
+                        val = field.get("/V")
+                        if val and str(val).strip():
+                            field_data[k] = str(val).strip()
+                    if field_data:
+                        # Format as readable text for GPT
+                        lines = [f"{k}: {v}" for k, v in field_data.items()]
+                        return "PDF FORM FIELDS:\n" + "\n".join(lines)
+            except Exception:
+                pass
+
+            # Fallback: extract static text with pdfplumber
+            import pdfplumber
             with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
                 text_parts = [page.extract_text() or "" for page in pdf.pages]
                 return "\n".join(text_parts).strip()
@@ -197,8 +222,8 @@ async def process_latest(db: Session = Depends(get_db)):
             return {"status": "error", "message": f"Graph API {r.status_code}: {r.text[:200]}"}
         messages = r.json().get("value", [])
 
-    # Filter for "Resource Request" subject in code
-    messages = [m for m in messages if "resource request" in (m.get("subject") or "").lower()]
+    # Filter for "Resource Request" or "Extension Request" subject
+    messages = [m for m in messages if any(kw in (m.get("subject") or "").lower() for kw in ("resource request", "extension request"))]
 
     processed = []
     for msg in messages:

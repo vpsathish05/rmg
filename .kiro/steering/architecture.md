@@ -7,7 +7,7 @@ AI-powered Resource Management System for JMan Group. Replaces manual email-base
 - UC1: RMG Engine — 3-tab view (Pipeline → Extensions → Changes) with AI-powered recommendation per role
   - Pipeline: new demand from pipeline_requests, AI scores candidates per open role
   - Extensions: auto-detected resource gaps (alloc_end < project_end) + AI replacement recommendations
-  - Changes: email PDF form → AI parse (pdfplumber + GPT-4o) → auto-route (NEW→Pipeline, EXTEND→Extensions, CHANGE→Changes). "Process Emails" button triggers manual fetch.
+  - Changes: email PDF form → AI parse (PyPDF2 form fields + pdfplumber fallback + GPT-4o) → auto-route (NEW→Pipeline, EXTEND→Changes with AI recs, CHANGE→Changes). Accepts subjects "Resource Request" and "Extension Request". "Process Emails" button triggers manual fetch.
 - UC2: Demand Forecasting — pipeline requests with 6-month outlook, weighted FTE, capacity gap, revenue at risk, hot deals
 - UC3: Availability Dashboard — employee allocation status with billability tracking, charts (utilization donut, RAG, demand vs supply, COE distribution)
 - UC4: Project Health — RAG from WSR data, overrunning & ramp-down detection
@@ -172,8 +172,10 @@ Key patterns:
 - Sender: `DoNotReply@e3445e90-bf10-44d1-8ea3-32eb935710d6.azurecomm.net`
 - Used for: sending recommendation emails from RMG Engine pipeline
 - Graph API still used for: webhook subscriptions + message fetch + PDF attachment extraction (inbound email parsing)
-- Email request routing: NEW → pipeline_requests, EXTEND/CHANGE → email_requests
-- PDF form: docs/change-request-form/RMG_Request_Form.html (unified form for all 3 types)
+- Email request routing: NEW → pipeline_requests, EXTEND/CHANGE → email_requests (Changes tab)
+- EXTEND requests show AI replacement recommendations in Changes tab
+- PDF form: official JMan editable PDFs (Resourcing Form + Change Request Form), extracted via PyPDF2 form fields
+- Accepted email subjects: "Resource Request", "Extension Request"
 - Graph permissions required: Mail.Read, Mail.Send (Application, admin-consented)
 
 ## Chatbot
