@@ -22,7 +22,10 @@ AI-driven resourcing system for JMan Group. Replaces manual email-based resource
 
 ## Key Features
 - 8-step AI scoring pipeline per role (COE detect → semantic match → formula → rationale → re-rank → KB proof → hire signal)
+- Relative availability scoring: avail_score = 1.0 if capacity meets requested allocation, proportional otherwise
+- pgvector ANN index for semantic skill matching (top-K nearest instead of full scan)
 - Email PDF form parsing: Resourcing Form + Change Request Form → auto-route (NEW→Pipeline, EXTEND→Changes with AI recs, CHANGE→Changes)
+- **Auto-reply for EXTEND emails**: when processed, system auto-runs AI recommendation and sends reply to sender via ACS with top candidates
 - Dashboard drill-downs: click any KPI or chart → modal with raw data + calculation explanation
 - Project Health: uses latest WSR with meaningful status (skips NO_COLOR entries)
 - Nightly pre-compute at 2 AM IST, ~$3.60/night for 240 roles

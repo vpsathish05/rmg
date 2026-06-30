@@ -19,13 +19,14 @@ With competency:    total = skill×0.40 + competency×0.25 + availability×0.25 
 Without competency: total = skill×0.65 + availability×0.25 + productivity×0.10
 
 skill_score = 0.5 × COE_skill_score + 0.5 × semantic_similarity (when embeddings available)
+avail_score = 1.0 if available >= requested_alloc_pct, else available / requested_alloc_pct
 ```
 Categories: Available (has capacity) → BestMatch (score ≥ 0.40, allocated) → Stretch (poor fit)
 
 ### AI Pipeline (per role recommendation)
 1. **COE Detection**: SQL role-based → SQL global fallback → GPT-4o inference
 2. **Skills Extraction**: LLM infers required skills when pipeline data has null/nan
-3. **Semantic Skill Match**: Embed role query → cosine similarity vs employee skill embeddings
+3. **Semantic Skill Match**: Embed role query → pgvector ANN index (top-K nearest) vs employee skill embeddings
 4. **Formula Scoring**: Weighted sum (skill + competency + availability + productivity)
 5. **Rationale Generation**: GPT-4o 2-3 sentence explanation per top 10 candidates
 6. **LLM Re-Ranking**: GPT-4o re-orders top 10 based on holistic fit
@@ -67,7 +68,7 @@ rmg/
 │   │       ├── resource-map/       ← Network graph + project/resource timelines
 │   │       └── recommend/          ← Manual recommendation form
 │   ├── components/
-│   │   ├── layout/sidebar.tsx      ← Navigation (Engine, Forecast, Resource Map, Dashboard)
+│   │   ├── layout/sidebar.tsx      ← Navigation (Dashboard, Engine, Forecast)
 │   │   └── ui/                     ← shadcn primitives
 │   └── lib/
 │       ├── api.ts                  ← Axios instance
@@ -97,8 +98,9 @@ rmg/
 │   │   └── services/
 │   │       ├── scorer.py         ← Core scoring engine (formula + semantic blend)
 │   │       ├── llm.py            ← GPT-4o: rationale, re-ranking, hire signals
-│   │       ├── kb.py             ← pgvector KB build + search + semantic skill scoring
+│   │       ├── kb.py             ← pgvector KB build + search + semantic skill scoring (ANN)
 │   │       ├── rec_cache.py      ← Nightly pre-compute (full AI pipeline)
+│   │       ├── auto_reply.py     ← Auto-reply: EXTEND emails → AI recommend → send via ACS
 │   │       ├── email_parser.py   ← GPT-4o email parsing
 │   │       └── graph.py          ← Microsoft Graph client
 │   ├── etl/
@@ -174,13 +176,15 @@ Key patterns:
 - Send via Azure Communication Services Email SDK (`azure-communication-email`)
 - Connection string: `ACS_CONNECTION_STRING` env var
 - Sender: `DoNotReply@e3445e90-bf10-44d1-8ea3-32eb935710d6.azurecomm.net`
-- Used for: sending recommendation emails from RMG Engine pipeline
+- Used for: sending recommendation emails from RMG Engine pipeline + auto-reply for EXTEND requests
+- **Auto-Reply (EXTEND)**: When an EXTEND email is processed, the system automatically runs AI recommendation (scorer + semantic ANN + rationale) and sends a reply to the sender with top candidates. Status changes to `REPLIED`.
 - Graph API still used for: webhook subscriptions + message fetch + PDF attachment extraction (inbound email parsing)
-- Email request routing: NEW → pipeline_requests, EXTEND/CHANGE → email_requests (Changes tab)
+- Email request routing: NEW → pipeline_requests, EXTEND → email_requests + auto-reply, CHANGE → email_requests (Changes tab)
 - EXTEND requests show AI replacement recommendations in Changes tab
 - PDF form: official JMan editable PDFs (Resourcing Form + Change Request Form), extracted via PyPDF2 form fields
 - Accepted email subjects: "Resource Request", "Extension Request"
 - Graph permissions required: Mail.Read, Mail.Send (Application, admin-consented)
+- email_requests.status: PENDING → PARSED → REPLIED (for EXTEND) or stays PARSED (for CHANGE/NEW)
 
 ## Chatbot
 - POST /api/chat — GPT-4o with function calling
@@ -192,7 +196,7 @@ Key patterns:
 - Backend: one router file per domain in `backend/app/routers/`
 - Frontend: ALL API calls centralized in `lib/hooks.ts` — never call Axios from components
 - UI: JMan brand — primary #19105B (Midnight Blue), secondary #FF6196 (Rose), 75% white / 20% primary / 5% secondary, Arial font
-- Sidebar: 4 top-level routes — Engine, Forecast, Resource Map, Dashboard
+- Sidebar: 3 top-level routes — Dashboard, Engine, Forecast
 - Scoring categories: Available / BestMatch (≥0.40) / Stretch
 - Auth: custom JWT (jose), httpOnly cookie, 8h expiry
 - Layered: Routers (thin) → Services (logic) → Database
@@ -203,10 +207,11 @@ Key patterns:
 ## Critical Files
 | File | Role |
 |------|------|
-| `backend/app/services/scorer.py` | Core scoring formula + semantic blend + categorization |
-| `backend/app/services/rec_cache.py` | Nightly AI orchestrator (all 8 steps) |
+| `backend/app/services/scorer.py` | Core scoring formula + semantic blend + relative avail scoring |
+| `backend/app/services/rec_cache.py` | Nightly AI orchestrator (all 8 steps, uses ANN) |
 | `backend/app/services/llm.py` | All GPT-4o calls: rationale, rerank, hire signal |
-| `backend/app/services/kb.py` | pgvector build + search + semantic skill scoring |
+| `backend/app/services/kb.py` | pgvector build + search + semantic skill scoring (ANN + full) |
+| `backend/app/services/auto_reply.py` | Auto-reply for EXTEND emails: recommend + build HTML + send ACS |
 | `backend/app/routers/rmg_engine.py` | Largest router — main operational screen |
 | `backend/etl/schema.sql` | Schema source of truth |
 | `backend/etl/build_skill_embeddings.py` | Employee skill embedding ETL |
