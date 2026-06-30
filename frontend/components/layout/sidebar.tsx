@@ -31,12 +31,15 @@ export default function Sidebar({ userName = "RMG User" }: { userName?: string }
       {/* Brand */}
       <div className="px-5 pt-6 pb-5 border-b border-gray-50">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-black text-sm text-white" style={{ background: "#19105B" }}>
-            J
+          <div className="w-9 h-9 shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" className="w-9 h-9">
+              <rect width="32" height="32" rx="10" fill="#19105B"/>
+              <text x="16" y="23" textAnchor="middle" fontFamily="Arial,sans-serif" fontWeight="900" fontSize="20" fill="white">J</text>
+            </svg>
           </div>
           <div>
             <p className="text-sm font-bold leading-none" style={{ color: "#19105B" }}>RMG Engine</p>
-            <p className="text-[10px] mt-0.5 font-medium text-gray-400">JMan Group</p>
+            <p className="text-[10px] mt-0.5 font-medium text-gray-400">Jman Group</p>
           </div>
         </div>
       </div>
