@@ -18,9 +18,15 @@ const FadeScene: React.FC<{
 }> = ({ children, duration, fadeIn = 15, fadeOut = 10 }) => {
   const frame = useCurrentFrame();
 
+  // Ensure strictly monotonically increasing input range
+  const fi = Math.max(fadeIn, 1);
+  const fo = Math.max(fadeOut, 1);
+  // Ensure no overlapping ranges
+  const safeEnd = Math.max(duration - fo, fi + 1);
+
   const opacity = interpolate(
     frame,
-    [0, fadeIn, duration - fadeOut, duration],
+    [0, fi, safeEnd, duration],
     [0, 1, 1, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );
@@ -36,7 +42,7 @@ export const AiEngineVideo: React.FC = () => {
   return (
     <>
       <Sequence from={SCENES.title.start} durationInFrames={SCENES.title.duration}>
-        <FadeScene duration={SCENES.title.duration} fadeIn={0} fadeOut={12}>
+        <FadeScene duration={SCENES.title.duration} fadeIn={1} fadeOut={12}>
           <TitleScene />
         </FadeScene>
       </Sequence>
