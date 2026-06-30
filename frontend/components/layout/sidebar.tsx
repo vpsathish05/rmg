@@ -5,10 +5,10 @@ import { LayoutDashboard, TrendingUp, Cpu, LogOut, Network } from "lucide-react"
 import { logout } from "@/lib/actions";
 
 const NAV = [
+  { href: "/",              label: "Dashboard",    icon: LayoutDashboard },
   { href: "/rmg-engine",    label: "Engine",       icon: Cpu },
   { href: "/forecast",      label: "Forecast",     icon: TrendingUp },
   { href: "/resource-map",  label: "Lifecycle",    icon: Network },
-  { href: "/",              label: "Dashboard",    icon: LayoutDashboard },
 ];
 
 export default function Sidebar({ userName = "RMG User" }: { userName?: string }) {
