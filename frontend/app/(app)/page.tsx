@@ -1,10 +1,12 @@
 "use client";
+import { useState, useEffect } from "react";
 import { useDashboardSummary, useDashboardCharts } from "@/lib/hooks";
-import { Users, FolderKanban, TrendingUp, Sparkles, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { Users, FolderKanban, TrendingUp, Sparkles, AlertTriangle, CheckCircle2, Clock, Info, X, Loader2 } from "lucide-react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
   LineChart, Line, CartesianGrid, Legend,
 } from "recharts";
+import api from "@/lib/api";
 
 const COLORS = {
   primary: "#19105B",    // Midnight Blue
@@ -17,9 +19,85 @@ const COLORS = {
   green: "#059669",
 };
 
+interface DrillDownData { title: string; explanation: string; columns: string[]; data: Record<string, unknown>[] }
+
+function DrillDownModal({ chart, onClose }: { chart: string; onClose: () => void }) {
+  const [data, setData] = useState<DrillDownData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const kpis = ["active_employees", "on_bench", "open_pipeline", "high_probability", "active_projects"];
+    const url = kpis.includes(chart) ? `/api/dashboard/kpi/detail?kpi=${chart}` : `/api/dashboard/charts/detail?chart=${chart}`;
+    api.get(url).then(r => { setData(r.data); setLoading(false); }).catch(() => setLoading(false));
+  }, [chart]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white w-full max-w-3xl mx-4 max-h-[80vh] flex flex-col shadow-2xl" style={{ borderRadius: 0 }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0" style={{ background: "#19105B" }}>
+          <h2 className="text-sm font-bold text-white">{data?.title ?? "Loading..."}</h2>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center text-white opacity-70 hover:opacity-100"><X className="w-4 h-4" /></button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-gray-400"><Loader2 className="w-5 h-5 animate-spin" /></div>
+        ) : data ? (
+          <div className="flex-1 overflow-y-auto">
+            {/* Explanation */}
+            <div className="px-6 py-3 border-b border-gray-50" style={{ background: "#19105B08" }}>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">How this is calculated</p>
+              <p className="text-xs leading-relaxed" style={{ color: "#19105B" }}>{data.explanation}</p>
+            </div>
+
+            {/* Data table */}
+            <div className="px-6 py-4 overflow-x-auto">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Raw Data ({data.data.length} rows)</p>
+              <table className="w-full text-[11px] border-collapse">
+                <thead>
+                  <tr style={{ background: "#19105B", color: "#fff" }}>
+                    {data.columns.map(col => <th key={col} className="px-3 py-2 text-left font-semibold">{col.replace(/_/g, " ")}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.data.map((row, i) => (
+                    <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                      {data.columns.map(col => (
+                        <td key={col} className="px-3 py-1.5" style={{ color: "#19105B" }}>
+                          {row[col] != null ? String(row[col]) : "—"}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 text-center py-12">No data</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ChartHeader({ title, subtitle, chart, onDrillDown }: { title: string; subtitle: string; chart: string; onDrillDown: (c: string) => void }) {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <div>
+        <h3 className="text-xs font-bold" style={{ color: "#19105B" }}>{title}</h3>
+        <p className="text-[10px] text-gray-400">{subtitle}</p>
+      </div>
+      <button onClick={() => onDrillDown(chart)} className="w-6 h-6 rounded flex items-center justify-center hover:bg-gray-100 transition-all" title="View details">
+        <Info className="w-3.5 h-3.5 text-gray-400" />
+      </button>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { data, isLoading } = useDashboardSummary();
   const { data: charts } = useDashboardCharts();
+  const [drillDown, setDrillDown] = useState<string | null>(null);
 
   if (isLoading || !data)
     return (
@@ -69,19 +147,19 @@ export default function Dashboard() {
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           {[
-            { label: "Active Employees", value: data.active_employees, icon: Users, accent: "#19105B" },
-            { label: "On Bench", value: data.on_bench, icon: Users, accent: "#19105B" },
-            { label: "Open Pipeline", value: data.pipeline_requests, icon: TrendingUp, accent: "#19105B" },
-            { label: "High Probability", value: data.high_probability_pipeline, icon: Sparkles, accent: "#FF6196" },
-            { label: "Active Projects", value: data.active_projects, icon: FolderKanban, accent: "#19105B" },
+            { label: "Active Employees", value: data.active_employees, icon: Users, accent: "#19105B", kpi: "active_employees" },
+            { label: "On Bench", value: data.on_bench, icon: Users, accent: "#19105B", kpi: "on_bench" },
+            { label: "Open Pipeline", value: data.pipeline_requests, icon: TrendingUp, accent: "#19105B", kpi: "open_pipeline" },
+            { label: "High Probability", value: data.high_probability_pipeline, icon: Sparkles, accent: "#FF6196", kpi: "high_probability" },
+            { label: "Active Projects", value: data.active_projects, icon: FolderKanban, accent: "#19105B", kpi: "active_projects" },
           ].map(k => (
-            <div key={k.label} className="bg-white rounded-2xl p-4 border border-gray-100">
+            <button key={k.label} onClick={() => setDrillDown(k.kpi)} className="text-left bg-white rounded-2xl p-4 border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{k.label}</p>
                 <k.icon className="w-4 h-4" style={{ color: k.accent }} />
               </div>
               <p className="text-3xl font-bold tabular-nums text-gray-900">{k.value.toLocaleString()}</p>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -113,8 +191,7 @@ export default function Dashboard() {
 
           {/* Project Health */}
           <div className="bg-white rounded-2xl p-5 border border-gray-100">
-            <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Project Health</h3>
-            <p className="text-[10px] text-gray-400 mb-3">{data.active_projects} active projects</p>
+            <ChartHeader title="Project Health" subtitle={`${data.active_projects} active projects`} chart="project_health" onDrillDown={setDrillDown} />
             <div className="h-48 flex flex-col justify-center">
               <ResponsiveContainer width="100%" height={40}>
                 <BarChart data={[{ red: data.red_projects, amber: data.amber_projects, green: greenProjects }]} layout="vertical" barSize={28}>
@@ -139,8 +216,7 @@ export default function Dashboard() {
 
           {/* Demand vs Supply */}
           <div className="bg-white rounded-2xl p-5 border border-gray-100">
-            <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Demand vs Supply</h3>
-            <p className="text-[10px] text-gray-400 mb-3">Next 6 months — roles needed vs people freeing up</p>
+            <ChartHeader title="Demand vs Supply" subtitle="Next 6 months — roles needed vs people freeing up" chart="demand_supply" onDrillDown={setDrillDown} />
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={charts?.demand_supply ?? []}>
@@ -161,8 +237,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Pipeline by Deal Stage */}
           <div className="bg-white rounded-2xl p-5 border border-gray-100">
-            <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Pipeline by Deal Stage</h3>
-            <p className="text-[10px] text-gray-400 mb-3">Request distribution</p>
+            <ChartHeader title="Pipeline by Deal Stage" subtitle="Request distribution" chart="pipeline_by_stage" onDrillDown={setDrillDown} />
             <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={charts?.pipeline_by_stage ?? []} layout="vertical" margin={{ left: 0, right: 16 }}>
@@ -177,8 +252,7 @@ export default function Dashboard() {
 
           {/* Top Open Roles */}
           <div className="bg-white rounded-2xl p-5 border border-gray-100">
-            <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Top Open Roles</h3>
-            <p className="text-[10px] text-gray-400 mb-3">Not Resourced — highest demand</p>
+            <ChartHeader title="Top Open Roles" subtitle="Not Resourced — highest demand" chart="top_roles" onDrillDown={setDrillDown} />
             <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={charts?.top_roles ?? []} layout="vertical" margin={{ left: 0, right: 16 }}>
@@ -193,8 +267,7 @@ export default function Dashboard() {
 
           {/* COE Distribution */}
           <div className="bg-white rounded-2xl p-5 border border-gray-100">
-            <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>COE Distribution</h3>
-            <p className="text-[10px] text-gray-400 mb-3">Employees by technology domain</p>
+            <ChartHeader title="COE Distribution" subtitle="Employees by technology domain" chart="coe_distribution" onDrillDown={setDrillDown} />
             <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={charts?.coe_distribution ?? []} layout="vertical" margin={{ left: 0, right: 16 }}>
@@ -208,6 +281,9 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Drill-down modal */}
+      {drillDown && <DrillDownModal chart={drillDown} onClose={() => setDrillDown(null)} />}
     </div>
   );
 }
