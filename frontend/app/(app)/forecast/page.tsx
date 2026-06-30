@@ -158,20 +158,37 @@ function InsightsView({ insights }: { insights: NonNullable<ReturnType<typeof us
         {insights.hot_deals.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-8">No high-probability deals starting within 3 months</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {insights.hot_deals.map((d, i) => (
-              <div key={i} className="rounded-xl border p-3 flex flex-col gap-1" style={{ borderColor: "#FF619630", background: "#FF61960a" }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold" style={{ color: "#19105B" }}>{d.client}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#19105B", color: "#fff" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {insights.hot_deals.map((d: any, i: number) => (
+              <div key={i} className="rounded-xl border overflow-hidden" style={{ borderColor: "#19105B20" }}>
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-3" style={{ background: "#19105B08" }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold" style={{ color: "#19105B" }}>{d.client}</span>
+                    {d.start_date && (
+                      <span className="text-[10px] text-gray-400 flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(d.start_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full text-white" style={{ background: "#19105B" }}>
                     {d.probability ? `${Math.round(d.probability * 100)}%` : "—"}
                   </span>
                 </div>
-                <span className="text-[11px] text-gray-600">{d.role}</span>
-                <div className="flex items-center gap-3 text-[10px] text-gray-400 mt-1">
-                  {d.start_date && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(d.start_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>}
-                  {d.duration_weeks && <span>{d.duration_weeks}w</span>}
-                  <span>{d.allocation_pct}%</span>
+                {/* Roles */}
+                <div className="px-4 py-2.5 space-y-1.5">
+                  {(d.roles || []).map((r: any, ri: number) => (
+                    <div key={ri} className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium" style={{ color: "#19105B" }}>{r.role ?? "—"}</span>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                        <span>{r.allocation_pct}%</span>
+                        {r.duration_weeks && <span>{r.duration_weeks}w</span>}
+                      </div>
+                    </div>
+                  ))}
+                  {!d.roles && d.role && <span className="text-[11px]" style={{ color: "#19105B" }}>{d.role}</span>}
+                </div>
+                {/* Footer */}
+                <div className="px-4 py-2 border-t text-[10px] text-gray-400" style={{ borderColor: "#19105B10" }}>
+                  {(d.roles || []).length} role{(d.roles || []).length !== 1 ? "s" : ""} needed
                 </div>
               </div>
             ))}

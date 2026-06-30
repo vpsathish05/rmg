@@ -136,17 +136,25 @@ def forecast_insights(db: Session = Depends(get_db)):
           AND probability_weight >= 0.7
           AND likely_start_date IS NOT NULL
           AND likely_start_date <= CURRENT_DATE + INTERVAL '3 months'
-        ORDER BY likely_start_date, probability_weight DESC
-        LIMIT 12
+        ORDER BY client_name, likely_start_date, probability_weight DESC
     """)).fetchall()
-    hot_deals = [{
-        "client": r.client_name,
-        "role": r.role_code_raw,
-        "probability": float(r.probability_weight) if r.probability_weight else None,
-        "start_date": r.likely_start_date.isoformat() if r.likely_start_date else None,
-        "duration_weeks": r.duration_weeks,
-        "allocation_pct": float(r.allocation_pct) if r.allocation_pct else 100,
-    } for r in hot_rows]
+    # Group by client
+    hot_deals_grouped: dict = {}
+    for r in hot_rows:
+        client = r.client_name or "Unknown"
+        if client not in hot_deals_grouped:
+            hot_deals_grouped[client] = {
+                "client": client,
+                "probability": float(r.probability_weight) if r.probability_weight else None,
+                "start_date": r.likely_start_date.isoformat() if r.likely_start_date else None,
+                "roles": [],
+            }
+        hot_deals_grouped[client]["roles"].append({
+            "role": r.role_code_raw,
+            "duration_weeks": r.duration_weeks,
+            "allocation_pct": float(r.allocation_pct) if r.allocation_pct else 100,
+        })
+    hot_deals = list(hot_deals_grouped.values())
 
     # 5. Smart alerts
     alerts = []
