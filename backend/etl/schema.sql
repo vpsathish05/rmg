@@ -159,7 +159,7 @@ CREATE TABLE IF NOT EXISTS email_requests (
     request_type        VARCHAR CHECK (request_type IN ('EXTEND','CHANGE','NEW')),
     raw_body            TEXT,
     parsed_json         JSONB,
-    status              VARCHAR CHECK (status IN ('PENDING','PARSED','ERROR')) DEFAULT 'PENDING',
+    status              VARCHAR CHECK (status IN ('PENDING','PARSED','ERROR','REPLIED')) DEFAULT 'PENDING',
     pipeline_request_id INTEGER REFERENCES pipeline_requests(id),
     created_at          TIMESTAMPTZ DEFAULT NOW()
 );

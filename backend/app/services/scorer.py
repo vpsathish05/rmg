@@ -193,10 +193,15 @@ def score_all(
         if comp_scores:
             comp_score = sum(comp_scores) / len(comp_scores) / 4.0
 
-        # Availability
+        # Availability — score relative to requested allocation
         allocated = alloc_cache.get(eid, 0.0)
         available = max(0.0, 100.0 - allocated)
-        avail_score = available / 100.0
+        if requested_alloc_pct > 0 and available >= requested_alloc_pct:
+            avail_score = 1.0  # has enough capacity for the role
+        elif requested_alloc_pct > 0:
+            avail_score = available / requested_alloc_pct  # partial fit
+        else:
+            avail_score = available / 100.0  # fallback if no allocation specified
 
         # Productivity
         hours = prod_cache.get(eid, 0.0)

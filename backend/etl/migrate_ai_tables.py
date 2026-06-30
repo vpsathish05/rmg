@@ -16,9 +16,14 @@ CREATE TABLE IF NOT EXISTS employee_skill_embeddings (
     embedding   vector(1536) NOT NULL,
     updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_emp_skill_embed
+
+-- IVFFlat index for ANN cosine similarity search
+-- lists = sqrt(N) is ideal; 20 suits ~200-400 employees
+-- Used by compute_semantic_skill_scores_ann() for ORDER BY <=> LIMIT K queries
+DROP INDEX IF EXISTS idx_emp_skill_embed;
+CREATE INDEX IF NOT EXISTS idx_emp_skill_embed_cosine
     ON employee_skill_embeddings USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 50);
+    WITH (lists = 20);
 """)
 print("employee_skill_embeddings table created!")
 conn.close()

@@ -1031,7 +1031,7 @@ function ChangeRequestCard({ r }: { r: { id: string; source_email: string | null
         {parsed.client_name && <span className="text-xs font-bold" style={{ color: "#19105B" }}>{parsed.client_name}</span>}
         {parsed.project_id && <span className="text-[10px] font-mono text-gray-400">{parsed.project_id}</span>}
         <span className="text-xs text-gray-400 ml-auto">{r.received_at ? new Date(r.received_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: r.status === "PARSED" ? "#19105B10" : "#FFC00020", color: r.status === "PARSED" ? "#19105B" : "#d97706" }}>{r.status}</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: r.status === "PARSED" ? "#19105B10" : r.status === "REPLIED" ? "#05966910" : "#FFC00020", color: r.status === "PARSED" ? "#19105B" : r.status === "REPLIED" ? "#059669" : "#d97706" }}>{r.status === "REPLIED" ? "Replied" : r.status}</span>
       </div>
 
       {expanded && (

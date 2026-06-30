@@ -187,3 +187,35 @@ async def compute_semantic_skill_scores(
         return {r.employee_id: max(0.0, float(r.similarity)) for r in rows}
     except Exception:
         return {}
+
+
+async def compute_semantic_skill_scores_ann(
+    db: Session,
+    role_text: str,
+    top_k: int = 50,
+) -> dict[str, float]:
+    """Use pgvector ANN index to find top-K most semantically similar employees.
+
+    Instead of scanning all employee embeddings, leverages the IVFFlat index
+    to return only the nearest neighbors — O(√N) vs O(N).
+    Returns {employee_id: similarity_score (0-1)}.
+    """
+    if not role_text.strip():
+        return {}
+
+    count = db.execute(text("SELECT COUNT(*) FROM employee_skill_embeddings")).scalar()
+    if not count:
+        return {}
+
+    try:
+        vec = (await _embed([role_text]))[0]
+        rows = db.execute(text("""
+            SELECT employee_id,
+                   ROUND((1 - (embedding <=> CAST(:vec AS vector)))::numeric, 4) AS similarity
+            FROM employee_skill_embeddings
+            ORDER BY embedding <=> CAST(:vec AS vector)
+            LIMIT :k
+        """), {"vec": str(vec), "k": top_k}).fetchall()
+        return {r.employee_id: max(0.0, float(r.similarity)) for r in rows}
+    except Exception:
+        return {}

@@ -17,7 +17,7 @@ from sqlalchemy import text
 
 from app.services import scorer as scoring_svc
 from app.services.llm import generate_rationales_batch, rerank_candidates, generate_smart_hire_signal
-from app.services.kb import search_employee_proofs, compute_semantic_skill_scores
+from app.services.kb import search_employee_proofs, compute_semantic_skill_scores_ann
 from app.schemas.recommend import RecommendRequest
 
 log = logging.getLogger(__name__)
@@ -212,10 +212,7 @@ async def compute_all(db: Session) -> dict:
                     role_skills = await _llm_extract_skills(role.role_code_raw or "", canonical)
 
                 role_query = f"{role.role_code_raw or ''} {coe} {role_skills or ''}".strip().replace("nan", "")
-                all_ids = [r.employee_id for r in db.execute(text(
-                    "SELECT employee_id FROM employees WHERE account_status=true AND is_active_version=true AND date_of_resignation IS NULL"
-                )).fetchall()]
-                semantic_scores = await compute_semantic_skill_scores(db, role_query, all_ids) if role_query else None
+                semantic_scores = await compute_semantic_skill_scores_ann(db, role_query, top_k=50) if role_query else None
 
                 # Score all candidates
                 scored = scoring_svc.score_all(

@@ -8,7 +8,6 @@ const NAV = [
   { href: "/",              label: "Dashboard",    icon: LayoutDashboard },
   { href: "/rmg-engine",    label: "Engine",       icon: Cpu },
   { href: "/forecast",      label: "Forecast",     icon: TrendingUp },
-  { href: "/resource-map",  label: "Lifecycle",    icon: Network },
 ];
 
 export default function Sidebar({ userName = "RMG User" }: { userName?: string }) {
