@@ -26,7 +26,7 @@ function DrillDownModal({ chart, onClose }: { chart: string; onClose: () => void
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const kpis = ["active_employees", "on_bench", "open_pipeline", "high_probability", "active_projects"];
+    const kpis = ["active_employees", "on_bench", "partially_available", "open_pipeline", "high_probability", "active_projects"];
     const url = kpis.includes(chart) ? `/api/dashboard/kpi/detail?kpi=${chart}` : `/api/dashboard/charts/detail?chart=${chart}`;
     api.get(url).then(r => { setData(r.data); setLoading(false); }).catch(() => setLoading(false));
   }, [chart]);
@@ -145,10 +145,11 @@ export default function Dashboard() {
         )}
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
           {[
             { label: "Active Employees", value: data.active_employees, icon: Users, accent: "#19105B", kpi: "active_employees" },
             { label: "On Bench", value: data.on_bench, icon: Users, accent: "#19105B", kpi: "on_bench" },
+            { label: "Partially Available", value: data.partially_available, icon: Users, accent: "#FF6196", kpi: "partially_available" },
             { label: "Open Pipeline", value: data.pipeline_requests, icon: TrendingUp, accent: "#19105B", kpi: "open_pipeline" },
             { label: "High Probability", value: data.high_probability_pipeline, icon: Sparkles, accent: "#FF6196", kpi: "high_probability" },
             { label: "Active Projects", value: data.active_projects, icon: FolderKanban, accent: "#19105B", kpi: "active_projects" },

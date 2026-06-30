@@ -62,7 +62,6 @@ def score_all(
 
     # ── 1. Candidate pool ────────────────────────────────────────────────────
     if always_best_match or not canonical_roles:
-        # Include everyone; score differentiates
         emp_rows = db.execute(text("""
             SELECT employee_id, job_name, canonical_role, location, department_name
             FROM employees
@@ -98,15 +97,17 @@ def score_all(
 
     emp_ids = [r.employee_id for r in emp_rows]
 
-    # ── 2. Batch: active allocations ─────────────────────────────────────────
+    # ── 2. Batch: active allocations (exclude BAU) ─────────────────────────────
     alloc_rows = db.execute(text("""
-        SELECT employee_id, COALESCE(SUM(allocation_pct), 0) AS total_pct
-        FROM allocations
-        WHERE employee_id = ANY(:ids)
-          AND is_active = true
-          AND is_active_version = true
-          AND (end_date IS NULL OR end_date >= CURRENT_DATE)
-        GROUP BY employee_id
+        SELECT a.employee_id, COALESCE(SUM(a.allocation_pct), 0) AS total_pct
+        FROM allocations a
+        JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+        WHERE a.employee_id = ANY(:ids)
+          AND a.is_active = true
+          AND a.is_active_version = true
+          AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+          AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+        GROUP BY a.employee_id
     """), {"ids": emp_ids}).fetchall()
     alloc_cache: dict[str, float] = {r.employee_id: float(r.total_pct) for r in alloc_rows}
 

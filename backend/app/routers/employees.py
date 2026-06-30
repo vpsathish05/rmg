@@ -59,6 +59,9 @@ def list_employees(
             ON a.employee_id = e.employee_id
             AND a.is_active = true
             AND a.is_active_version = true
+        LEFT JOIN projects p
+            ON p.project_id = a.project_id AND p.is_active_version = true
+            AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
         WHERE e.account_status = true
           AND e.is_active_version = true
           AND e.date_of_resignation IS NULL

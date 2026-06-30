@@ -52,6 +52,8 @@ def _search_available(db: Session, role: str | None, skill: str | None) -> str:
         LEFT JOIN allocations a ON a.employee_id = e.employee_id
           AND a.is_active = true AND a.is_active_version = true
           AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+        LEFT JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+          AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
         WHERE e.account_status = true AND e.is_active_version = true
           AND e.date_of_resignation IS NULL
     """
@@ -81,7 +83,13 @@ def _get_dashboard_stats(db: Session) -> str:
     active = db.execute(text("SELECT COUNT(*) FROM employees WHERE account_status = true AND is_active_version = true AND date_of_resignation IS NULL")).scalar()
     bench = db.execute(text("""
         SELECT COUNT(*) FROM employees e WHERE e.account_status = true AND e.is_active_version = true AND e.date_of_resignation IS NULL
-          AND NOT EXISTS (SELECT 1 FROM allocations a WHERE a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE))
+          AND COALESCE((
+              SELECT SUM(a.allocation_pct) FROM allocations a
+              JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+              WHERE a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true
+                AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+          ), 0) = 0
     """)).scalar()
     pipeline = db.execute(text("SELECT COUNT(*) FROM pipeline_requests WHERE LOWER(status) = 'not resourced'")).scalar()
     projects = db.execute(text("SELECT COUNT(*) FROM projects WHERE UPPER(project_status) = 'ACTIVE' AND is_active_version = true")).scalar()
@@ -97,9 +105,15 @@ def _get_capacity_gap(db: Session) -> str:
     """)).fetchall()
     bench = db.execute(text("""
         SELECT e.canonical_role, COUNT(*) AS bench FROM employees e
-        LEFT JOIN allocations a ON a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         WHERE e.account_status = true AND e.is_active_version = true AND e.date_of_resignation IS NULL AND e.canonical_role IS NOT NULL
-        GROUP BY e.canonical_role HAVING COALESCE(SUM(a.allocation_pct), 0) = 0
+          AND COALESCE((
+              SELECT SUM(a.allocation_pct) FROM allocations a
+              JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+              WHERE a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true
+                AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+          ), 0) = 0
+        GROUP BY e.canonical_role
     """)).fetchall()
     bench_map = {r.canonical_role: r.bench for r in bench}
     return json.dumps([{"role": r.role, "demand_fte": float(r.demand), "bench": bench_map.get(r.role, 0), "gap": round(float(r.demand) - bench_map.get(r.role, 0), 1)} for r in rows])

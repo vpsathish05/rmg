@@ -93,13 +93,16 @@ def forecast_insights(db: Session = Depends(get_db)):
     bench_rows = db.execute(text("""
         SELECT e.canonical_role AS role, COUNT(*) AS bench
         FROM employees e
-        LEFT JOIN allocations a ON a.employee_id = e.employee_id
-          AND a.is_active = true AND a.is_active_version = true
-          AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
         WHERE e.account_status = true AND e.is_active_version = true
           AND e.date_of_resignation IS NULL AND e.canonical_role IS NOT NULL
+          AND COALESCE((
+              SELECT SUM(a.allocation_pct) FROM allocations a
+              JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+              WHERE a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true
+                AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+          ), 0) = 0
         GROUP BY e.canonical_role
-        HAVING COALESCE(SUM(a.allocation_pct), 0) = 0
     """)).fetchall()
     bench_map = {r.role: int(r.bench) for r in bench_rows}
 

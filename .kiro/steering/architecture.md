@@ -10,7 +10,7 @@ AI-powered Resource Management System for JMan Group. Replaces manual email-base
   - Changes: email PDF form → AI parse (PyPDF2 form fields + pdfplumber fallback + GPT-4o) → auto-route (NEW→Pipeline, EXTEND→Changes with AI recs, CHANGE→Changes). Accepts subjects "Resource Request" and "Extension Request". "Process Emails" button triggers manual fetch.
 - UC2: Demand Forecasting — pipeline requests with 6-month outlook, weighted FTE, capacity gap, revenue at risk, hot deals
 - UC3: Availability Dashboard — employee allocation status with billability tracking, charts (utilization donut, RAG, demand vs supply, COE distribution)
-- UC4: Project Health — RAG from WSR data, overrunning & ramp-down detection
+- UC4: Project Health — RAG from WSR data (latest non-NO_COLOR entry), overrunning & ramp-down detection
 - UC5: Resource Map — network graph (projects connected by shared employees) + project/resource timeline (Gantt)
 
 ### Scoring Formula
@@ -152,6 +152,10 @@ Key patterns:
 - `is_active_version = true` filter on most queries (soft-versioning)
 - `(end_date IS NULL OR end_date >= CURRENT_DATE)` for active allocations
 - `score > 0` filter for meaningful skill scores
+- BAU exclusion: `LOWER(p.type_of_project) != 'bau activity'` on ALL allocation queries (BAU is tracking overhead, not real work)
+- Project Health: uses latest WSR entry WHERE at least one status != 'NO_COLOR' (skips blank entries)
+- COE grouping: `LOWER(TRIM(coe))` for case-insensitive dedup
+- Dashboard KPIs and charts all have drill-down modals showing raw data + calculation explanation
 
 ## AI Integration Summary
 | Service | Model | Purpose | When |

@@ -16,21 +16,23 @@ def _overall(statuses):
 
 @router.get("/summary", response_model=DashboardSummary)
 def summary(db: Session = Depends(get_db)):
-    # Employee counts
+    # Employee counts (BAU allocations excluded from allocation %)
     emp_rows = db.execute(text("""
-        SELECT
-            e.employee_id,
-            COALESCE(SUM(a.allocation_pct), 0) AS allocated_pct
+        SELECT e.employee_id,
+            COALESCE((
+                SELECT SUM(a.allocation_pct)
+                FROM allocations a
+                JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+                WHERE a.employee_id = e.employee_id
+                  AND a.is_active = true AND a.is_active_version = true
+                  AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                  AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+            ), 0) AS allocated_pct
         FROM employees e
-        LEFT JOIN allocations a
-            ON a.employee_id = e.employee_id
-            AND a.is_active = true
-            AND a.is_active_version = true
         WHERE e.account_status = true
           AND e.is_active_version = true
           AND e.date_of_resignation IS NULL
           AND e.job_name IS NOT NULL
-        GROUP BY e.employee_id
     """)).fetchall()
 
     total_emp = db.execute(text(
@@ -47,7 +49,7 @@ def summary(db: Session = Depends(get_db)):
         else:
             allocated += 1
 
-    # Project health
+    # Project health — use latest WSR with meaningful status (not all NO_COLOR)
     health_rows = db.execute(text("""
         SELECT ws.scope_status, ws.schedule_status, ws.quality_status,
                ws.csat_status, ws.team_status
@@ -57,6 +59,9 @@ def summary(db: Session = Depends(get_db)):
                    csat_status, team_status
             FROM weekly_status
             WHERE project_id = p.project_id
+              AND (scope_status != 'NO_COLOR' OR schedule_status != 'NO_COLOR'
+                   OR quality_status != 'NO_COLOR' OR csat_status != 'NO_COLOR'
+                   OR team_status != 'NO_COLOR')
             ORDER BY week_end DESC NULLS LAST
             LIMIT 1
         ) ws ON true
@@ -127,9 +132,11 @@ def charts(db: Session = Depends(get_db)):
     supply_rows = db.execute(text("""
         SELECT TO_CHAR(a.end_date, 'YYYY-MM') AS month, COUNT(DISTINCT a.employee_id) AS freeing
         FROM allocations a
+        JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
         WHERE a.is_active = true AND a.is_active_version = true
           AND a.end_date >= DATE_TRUNC('month', CURRENT_DATE)
           AND a.end_date < CURRENT_DATE + INTERVAL '6 months'
+          AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
         GROUP BY TO_CHAR(a.end_date, 'YYYY-MM')
         ORDER BY month
     """)).fetchall()
@@ -187,6 +194,9 @@ def chart_detail(chart: str, db: Session = Depends(get_db)):
             LEFT JOIN LATERAL (
                 SELECT scope_status, schedule_status, quality_status, csat_status, team_status, week_end
                 FROM weekly_status WHERE project_id = p.project_id
+                  AND (scope_status != 'NO_COLOR' OR schedule_status != 'NO_COLOR'
+                       OR quality_status != 'NO_COLOR' OR csat_status != 'NO_COLOR'
+                       OR team_status != 'NO_COLOR')
                 ORDER BY week_end DESC NULLS LAST LIMIT 1
             ) ws ON true
             WHERE p.project_status IN ('ACTIVE','DEAL WON') AND p.is_active_version = true
@@ -203,7 +213,7 @@ def chart_detail(chart: str, db: Session = Depends(get_db)):
         } for r in rows]
         return {
             "title": "Project Health",
-            "explanation": "Overall health = worst status across Scope, Schedule, Quality, CSAT, and Team from the latest weekly_status report per project. RED if any dimension is RED, AMBER if any is AMBER, else GREEN.",
+            "explanation": "Overall health = worst status across Scope, Schedule, Quality, CSAT, and Team from the latest weekly_status report (excluding all-NO_COLOR entries). RED if any dimension is RED, AMBER if any is AMBER, else GREEN. Projects with no colored WSR show as NO_COLOR.",
             "columns": ["project_id", "client", "coe", "scope", "schedule", "quality", "csat", "team", "week"],
             "data": data,
         }
@@ -266,8 +276,10 @@ def chart_detail(chart: str, db: Session = Depends(get_db)):
             SELECT TO_CHAR(a.end_date, 'YYYY-MM') AS month, a.employee_id, e.job_name, a.project_id
             FROM allocations a
             JOIN employees e ON e.employee_id = a.employee_id
+            JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
             WHERE a.is_active = true AND a.is_active_version = true
               AND a.end_date >= DATE_TRUNC('month', CURRENT_DATE) AND a.end_date < CURRENT_DATE + INTERVAL '6 months'
+              AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
             ORDER BY a.end_date
         """)).fetchall()
         data = []
@@ -309,18 +321,20 @@ def kpi_detail(kpi: str, db: Session = Depends(get_db)):
         rows = db.execute(text("""
             SELECT e.employee_id, e.job_name, e.canonical_role, e.location
             FROM employees e
-            LEFT JOIN allocations a ON a.employee_id = e.employee_id
-              AND a.is_active = true AND a.is_active_version = true
-              AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
             WHERE e.account_status = true AND e.is_active_version = true
               AND e.date_of_resignation IS NULL AND e.job_name IS NOT NULL
-            GROUP BY e.employee_id, e.job_name, e.canonical_role, e.location
-            HAVING COALESCE(SUM(a.allocation_pct), 0) = 0
+              AND COALESCE((
+                  SELECT SUM(a.allocation_pct) FROM allocations a
+                  JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+                  WHERE a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true
+                    AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                    AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+              ), 0) = 0
             ORDER BY e.canonical_role, e.employee_id
         """)).fetchall()
         return {
             "title": "On Bench",
-            "explanation": "Active employees with 0% total allocation — no active allocation where end_date >= today. These people are fully available for new projects.",
+            "explanation": "Active employees with 0% non-BAU allocation. BAU Activity allocations are excluded (tracking overhead, not real work). These people are fully available for client projects.",
             "columns": ["employee_id", "job_name", "role", "location"],
             "data": [{"employee_id": r.employee_id, "job_name": r.job_name, "role": r.canonical_role, "location": r.location} for r in rows],
         }
@@ -350,6 +364,42 @@ def kpi_detail(kpi: str, db: Session = Depends(get_db)):
             "explanation": "Pipeline requests WHERE probability_weight >= 0.70 (70%+). These are the most likely deals to convert — highest priority for resourcing.",
             "columns": ["id", "client", "role", "status", "stage", "probability", "start_date"],
             "data": [{"id": r.id, "client": r.client_name, "role": r.role_code_raw, "status": r.status, "stage": r.deal_stage, "probability": f"{int(r.probability_weight*100)}%", "start_date": r.likely_start_date.isoformat() if r.likely_start_date else "—"} for r in rows],
+        }
+
+    elif kpi == "partially_available":
+        rows = db.execute(text("""
+            SELECT e.employee_id, e.job_name, e.canonical_role, e.location,
+                COALESCE((
+                    SELECT SUM(a.allocation_pct) FROM allocations a
+                    JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+                    WHERE a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true
+                      AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                      AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+                ), 0) AS allocated_pct
+            FROM employees e
+            WHERE e.account_status = true AND e.is_active_version = true
+              AND e.date_of_resignation IS NULL AND e.job_name IS NOT NULL
+              AND COALESCE((
+                  SELECT SUM(a.allocation_pct) FROM allocations a
+                  JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+                  WHERE a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true
+                    AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                    AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+              ), 0) > 0
+              AND COALESCE((
+                  SELECT SUM(a.allocation_pct) FROM allocations a
+                  JOIN projects p ON p.project_id = a.project_id AND p.is_active_version = true
+                  WHERE a.employee_id = e.employee_id AND a.is_active = true AND a.is_active_version = true
+                    AND (a.end_date IS NULL OR a.end_date >= CURRENT_DATE)
+                    AND LOWER(COALESCE(p.type_of_project, '')) != 'bau activity'
+              ), 0) < 100
+            ORDER BY e.canonical_role, e.employee_id
+        """)).fetchall()
+        return {
+            "title": "Partially Available",
+            "explanation": "Active employees with 1-99% non-BAU allocation. They have some client/internal work but still have remaining capacity available for new projects.",
+            "columns": ["employee_id", "job_name", "role", "location", "allocated_pct"],
+            "data": [{"employee_id": r.employee_id, "job_name": r.job_name, "role": r.canonical_role, "location": r.location, "allocated_pct": f"{int(r.allocated_pct)}%"} for r in rows],
         }
 
     elif kpi == "active_projects":
