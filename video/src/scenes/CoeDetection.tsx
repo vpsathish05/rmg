@@ -105,22 +105,25 @@ export const CoeDetection: React.FC = () => {
       />
 
       {/* Arrow 1→2 */}
-      <Arrow x1={490} y1={345} x2={620} y2={345} delay={55} />
+      <Arrow x1={490} y1={345} x2={610} y2={345} delay={55} />
 
       {/* X mark on node 1 */}
       <div
         style={{
           position: "absolute",
-          left: 500,
-          top: 280,
+          left: 260,
+          top: 400,
           opacity: x1Opacity,
           fontFamily: FONT.family,
-          fontSize: 36,
+          fontSize: 20,
           fontWeight: "bold",
           color: COLORS.red,
+          background: "rgba(255,0,0,0.08)",
+          padding: "4px 12px",
+          border: `1px solid ${COLORS.red}`,
         }}
       >
-        No match
+        &#10007; No match found
       </div>
 
       {/* Node 2: SQL Global Fallback */}
@@ -131,27 +134,30 @@ export const CoeDetection: React.FC = () => {
         delay={90}
         x={620}
         y={300}
-        width={340}
+        width={320}
         height={90}
       />
 
       {/* Arrow 2→3 */}
-      <Arrow x1={960} y1={345} x2={1090} y2={345} delay={115} />
+      <Arrow x1={940} y1={345} x2={1060} y2={345} delay={115} />
 
       {/* X mark on node 2 */}
       <div
         style={{
           position: "absolute",
-          left: 970,
-          top: 280,
+          left: 700,
+          top: 400,
           opacity: x2Opacity,
           fontFamily: FONT.family,
-          fontSize: 36,
+          fontSize: 20,
           fontWeight: "bold",
           color: COLORS.red,
+          background: "rgba(255,0,0,0.08)",
+          padding: "4px 12px",
+          border: `1px solid ${COLORS.red}`,
         }}
       >
-        No match
+        &#10007; No match found
       </div>
 
       {/* Node 3: GPT-4o */}
@@ -160,9 +166,9 @@ export const CoeDetection: React.FC = () => {
         subtitle="LLM infers COE from role name + skills"
         variant="highlight"
         delay={150}
-        x={1090}
+        x={1060}
         y={300}
-        width={340}
+        width={320}
         height={90}
       />
 
@@ -170,15 +176,19 @@ export const CoeDetection: React.FC = () => {
       <div
         style={{
           position: "absolute",
-          left: 1440,
-          top: 310,
+          left: 1140,
+          top: 400,
           opacity: checkOpacity,
           fontFamily: FONT.family,
-          fontSize: 48,
+          fontSize: 20,
+          fontWeight: "bold",
           color: COLORS.green,
+          background: "rgba(0,176,80,0.08)",
+          padding: "4px 12px",
+          border: `1px solid ${COLORS.green}`,
         }}
       >
-        &#10003;
+        &#10003; Match: Data Engineering
       </div>
 
       {/* Description under the flow */}

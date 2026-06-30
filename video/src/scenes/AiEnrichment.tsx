@@ -1,12 +1,10 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame, spring, useVideoConfig } from "remotion";
+import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
 import { COLORS, FONT } from "../styles/brand";
-import { FlowNode } from "../components/FlowNode";
 import { Arrow } from "../components/Arrow";
 
 export const AiEnrichment: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
 
   // Title
   const titleOpacity = interpolate(frame, [0, 20], [0, 1], {
@@ -140,16 +138,25 @@ export const AiEnrichment: React.FC = () => {
 
       {/* Track 1: Rationale */}
       <div style={{ position: "absolute", left: 480, top: 240, opacity: track1Opacity }}>
-        <FlowNode
-          label="Rationale Generation"
-          subtitle="2-3 sentence explanation per candidate"
-          variant="primary"
-          delay={0}
-          x={0}
-          y={0}
-          width={380}
-          height={80}
-        />
+        <div
+          style={{
+            width: 380,
+            height: 80,
+            background: COLORS.trypanBlue,
+            border: `2px solid ${COLORS.midnightBlue}`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <span style={{ fontFamily: FONT.family, fontSize: FONT.body.size, fontWeight: "bold", color: COLORS.white }}>
+            Rationale Generation
+          </span>
+          <span style={{ fontFamily: FONT.family, fontSize: FONT.small.size, color: COLORS.white, opacity: 0.8 }}>
+            2-3 sentence explanation per candidate
+          </span>
+        </div>
       </div>
 
       {/* Track 1 Output */}
@@ -182,16 +189,25 @@ export const AiEnrichment: React.FC = () => {
 
       {/* Track 2: Re-Ranking */}
       <div style={{ position: "absolute", left: 480, top: 380, opacity: track2Opacity }}>
-        <FlowNode
-          label="LLM Re-Ranking"
-          subtitle="Holistic reorder based on overall fit"
-          variant="highlight"
-          delay={0}
-          x={0}
-          y={0}
-          width={380}
-          height={80}
-        />
+        <div
+          style={{
+            width: 380,
+            height: 80,
+            background: COLORS.rose,
+            border: `2px solid ${COLORS.berry}`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <span style={{ fontFamily: FONT.family, fontSize: FONT.body.size, fontWeight: "bold", color: COLORS.white }}>
+            LLM Re-Ranking
+          </span>
+          <span style={{ fontFamily: FONT.family, fontSize: FONT.small.size, color: COLORS.white, opacity: 0.8 }}>
+            Holistic reorder based on overall fit
+          </span>
+        </div>
       </div>
 
       {/* Track 2 Output */}
@@ -229,16 +245,25 @@ export const AiEnrichment: React.FC = () => {
 
       {/* Track 3: KB Proof */}
       <div style={{ position: "absolute", left: 480, top: 520, opacity: track3Opacity }}>
-        <FlowNode
-          label="KB Proof Search"
-          subtitle="pgvector: past project evidence per candidate"
-          variant="accent"
-          delay={0}
-          x={0}
-          y={0}
-          width={380}
-          height={80}
-        />
+        <div
+          style={{
+            width: 380,
+            height: 80,
+            background: COLORS.turquoise,
+            border: `2px solid ${COLORS.emerald}`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <span style={{ fontFamily: FONT.family, fontSize: FONT.body.size, fontWeight: "bold", color: COLORS.midnightBlue }}>
+            KB Proof Search
+          </span>
+          <span style={{ fontFamily: FONT.family, fontSize: FONT.small.size, color: COLORS.midnightBlue, opacity: 0.8 }}>
+            pgvector: past project evidence per candidate
+          </span>
+        </div>
       </div>
 
       {/* Track 3 Output */}

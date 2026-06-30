@@ -150,12 +150,12 @@ export const FormulaScore: React.FC = () => {
       <div
         style={{
           position: "absolute",
-          left: 870,
+          left: 900,
           top: 450,
           opacity: availNoteOpacity,
           background: COLORS.turquoise,
           padding: "8px 16px",
-          maxWidth: 380,
+          maxWidth: 360,
         }}
       >
         <span
@@ -174,13 +174,13 @@ export const FormulaScore: React.FC = () => {
       <div
         style={{
           position: "absolute",
-          left: 870,
+          left: 900,
           top: 310,
           opacity: blendOpacity,
           background: COLORS.greyLight,
           border: `1px solid ${COLORS.grey}`,
           padding: "12px 20px",
-          maxWidth: 400,
+          maxWidth: 360,
         }}
       >
         <p

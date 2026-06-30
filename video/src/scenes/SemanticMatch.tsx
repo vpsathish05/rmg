@@ -40,8 +40,8 @@ export const SemanticMatch: React.FC = () => {
     config: { damping: 14, stiffness: 100 },
   });
 
-  // Vector space dots appear
-  const dotsPhase = interpolate(frame, [60, 100], [0, 1], {
+  // Vector space dots appear (used for timing reference)
+  const _dotsPhase = interpolate(frame, [60, 100], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
