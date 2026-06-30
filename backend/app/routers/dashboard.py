@@ -128,7 +128,7 @@ def charts(db: Session = Depends(get_db)):
         SELECT TO_CHAR(a.end_date, 'YYYY-MM') AS month, COUNT(DISTINCT a.employee_id) AS freeing
         FROM allocations a
         WHERE a.is_active = true AND a.is_active_version = true
-          AND a.end_date >= CURRENT_DATE
+          AND a.end_date >= DATE_TRUNC('month', CURRENT_DATE)
           AND a.end_date < CURRENT_DATE + INTERVAL '6 months'
         GROUP BY TO_CHAR(a.end_date, 'YYYY-MM')
         ORDER BY month
@@ -136,7 +136,7 @@ def charts(db: Session = Depends(get_db)):
     demand_rows = db.execute(text("""
         SELECT TO_CHAR(likely_start_date, 'YYYY-MM') AS month, COUNT(*) AS demand
         FROM pipeline_requests
-        WHERE likely_start_date >= CURRENT_DATE
+        WHERE likely_start_date >= DATE_TRUNC('month', CURRENT_DATE)
           AND likely_start_date < CURRENT_DATE + INTERVAL '6 months'
           AND LOWER(status) = 'not resourced'
         GROUP BY TO_CHAR(likely_start_date, 'YYYY-MM')
@@ -258,7 +258,7 @@ def chart_detail(chart: str, db: Session = Depends(get_db)):
         demand_rows = db.execute(text("""
             SELECT TO_CHAR(likely_start_date, 'YYYY-MM') AS month, client_name, role_code_raw, canonical_roles
             FROM pipeline_requests
-            WHERE likely_start_date >= CURRENT_DATE AND likely_start_date < CURRENT_DATE + INTERVAL '6 months'
+            WHERE likely_start_date >= DATE_TRUNC('month', CURRENT_DATE) AND likely_start_date < CURRENT_DATE + INTERVAL '6 months'
               AND LOWER(status) = 'not resourced'
             ORDER BY likely_start_date
         """)).fetchall()
@@ -267,7 +267,7 @@ def chart_detail(chart: str, db: Session = Depends(get_db)):
             FROM allocations a
             JOIN employees e ON e.employee_id = a.employee_id
             WHERE a.is_active = true AND a.is_active_version = true
-              AND a.end_date >= CURRENT_DATE AND a.end_date < CURRENT_DATE + INTERVAL '6 months'
+              AND a.end_date >= DATE_TRUNC('month', CURRENT_DATE) AND a.end_date < CURRENT_DATE + INTERVAL '6 months'
             ORDER BY a.end_date
         """)).fetchall()
         data = []
