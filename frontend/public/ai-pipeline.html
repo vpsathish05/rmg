@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SapienSync Recommendation Engine — RMG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#19105B;
+    --bg-step:#FFFFFF;
+    --surface:#FFFFFF;
+    --surface-alt:#F2F2F2;
+    --ink:#19105B;
+    --ink-soft:#4A3D7A;
+    --white:#FFFFFF;
+    --pink:#FF6196;
+    --teal:#71EAE1;
+    --purple:#3411A3;
+    --lavender:#A16BDB;
+    --line:rgba(24,15,90,0.14);
+    --shadow:rgba(24,15,90,0.14);
+    --red:#FF4D6D;
+    --green:#2FBF71;
+  }
+  [data-theme="dark"]{
+    --bg-deep:#0A0726;
+    --bg-step:#140D3C;
+    --surface:#1D1652;
+    --surface-alt:#241C5E;
+    --ink:#F3F1FF;
+    --ink-soft:#B7AEE0;
+    --white:#FFFFFF;
+    --pink:#FF7FAE;
+    --teal:#7FF2E9;
+    --purple:#6C4CF1;
+    --lavender:#BE97F5;
+    --line:rgba(243,241,255,0.14);
+    --shadow:rgba(0,0,0,0.45);
+    --red:#FF6B85;
+    --green:#4ADE93;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg-step);
+    color:var(--ink);
+    font-family:'Manrope', sans-serif;
+    transition:background .5s ease, color .5s ease;
+  }
+  code, .mono{font-family:'JetBrains Mono', monospace;}
+
+  /* ---------- theme toggle ---------- */
+  .toggle{
+    position:fixed; top:20px; right:20px; z-index:80;
+    display:flex; align-items:center; gap:8px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 14px 6px 6px;
+    box-shadow:0 8px 24px var(--shadow);
+    cursor:pointer; user-select:none;
+    transition:background .5s ease, border-color .5s ease;
+  }
+  .toggle .dot{
+    width:26px; height:26px; border-radius:50%;
+    background:linear-gradient(135deg, var(--pink), var(--purple));
+    display:flex; align-items:center; justify-content:center; font-size:13px;
+    transition:transform .4s cubic-bezier(.34,1.56,.64,1);
+  }
+  .toggle:active .dot{transform:rotate(20deg);}
+  .toggle span{font-size:12.5px; font-weight:700; color:var(--ink-soft);}
+
+  section{padding:130px 8vw; position:relative; overflow:hidden;}
+  .deep{background:var(--bg-deep); color:var(--white); transition:background .5s ease;}
+  .step{background:var(--bg-step); transition:background .5s ease;}
+
+  .eyebrow{
+    font-size:12.5px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--pink); margin-bottom:10px;
+  }
+  h2.step-title{font-size:clamp(28px,4vw,42px); margin:0 0 8px; font-weight:800;}
+  .step-sub{color:var(--ink-soft); font-size:16px; margin:0 0 50px; max-width:560px;}
+  .deep .step-sub{color:rgba(255,255,255,.65);}
+
+  .reveal{opacity:0; transform:translateY(28px); transition:opacity .6s cubic-bezier(.2,.7,.3,1), transform .6s cubic-bezier(.2,.7,.3,1);}
+  .reveal.in{opacity:1; transform:translateY(0);}
+
+  /* ---------- hero ---------- */
+  .hero{
+    min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:40px 20px;
+  }
+  .mark{
+    width:64px; height:64px; border-radius:16px;
+    background:linear-gradient(135deg, var(--pink), var(--purple));
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:26px; color:#fff; margin-bottom:34px;
+  }
+  .hero h1{font-size:clamp(38px,6vw,58px); margin:0 0 16px; font-weight:800; letter-spacing:-.01em;}
+  .hero p{color:rgba(255,255,255,.65); font-size:18px; max-width:480px; margin:0 auto;}
+  .hero footer{position:absolute; bottom:36px; font-size:12.5px; color:rgba(255,255,255,.45);}
+  .scroll-cue{margin-top:60px; display:flex; flex-direction:column; align-items:center; gap:8px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,.45);}
+  .scroll-cue .stick{width:2px; height:40px; border-radius:2px; background:linear-gradient(var(--teal), transparent); animation:pulse 1.8s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.25;}50%{opacity:1;}}
+
+  /* ---------- STEP 1: pipeline card ---------- */
+  .req-card{
+    max-width:520px; border:1px solid var(--line); border-radius:6px; overflow:hidden;
+    box-shadow:0 20px 50px var(--shadow);
+  }
+  .req-head{
+    background:var(--bg-deep); color:#fff; padding:16px 22px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .req-head b{font-size:16px;}
+  .badge{
+    font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
+    border:1px solid var(--pink); color:var(--pink); padding:4px 10px; border-radius:4px;
+  }
+  .req-body{padding:6px 22px;}
+  .req-row{
+    display:flex; justify-content:space-between; padding:14px 0; border-bottom:1px solid var(--line);
+    opacity:0; transform:translateX(-12px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .req-row.in{opacity:1; transform:translateX(0);}
+  .req-row:last-child{border-bottom:none;}
+  .req-row .k{font-weight:700; font-size:14.5px;}
+  .req-row .v{color:var(--purple); font-size:14.5px; font-weight:600;}
+  [data-theme="dark"] .req-row .v{color:var(--lavender);}
+  .req-row .v.status{color:var(--pink); font-weight:800;}
+  .trigger-note{margin-top:26px; font-size:13.5px; color:var(--ink-soft); opacity:0; transition:opacity .6s ease .3s;}
+  .trigger-note.in{opacity:1;}
+
+  /* ---------- STEP 1: source tabs ---------- */
+  .source-tabs{display:flex; gap:8px; margin-bottom:30px;}
+  .source-tab{
+    display:flex; align-items:center; gap:8px;
+    padding:9px 18px; border-radius:999px; border:1px solid var(--line);
+    background:var(--surface); font-size:13px; font-weight:700; color:var(--ink-soft);
+    cursor:pointer; user-select:none; transition:background .3s ease, color .3s ease, border-color .3s ease;
+  }
+  .source-tab .n{width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.5;}
+  .source-tab.active{background:var(--bg-deep); color:#fff; border-color:var(--bg-deep);}
+  .source-tab:not(.active):hover{border-color:var(--purple); color:var(--purple);}
+  [data-theme="dark"] .source-tab:not(.active):hover{color:var(--lavender); border-color:var(--lavender);}
+
+  .source-panel{display:none;}
+  .source-panel.active{display:block;}
+
+  .badge.parsed{border-color:var(--green); color:var(--green);}
+  .mail-meta{
+    font-size:12px; color:var(--ink-soft); padding:12px 22px 0;
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+  }
+  .mail-meta b{color:var(--ink); font-weight:700;}
+
+  /* ---------- STEP 1: two-source merge visual ---------- */
+  .dual-source-grid{display:flex; gap:36px; flex-wrap:wrap; align-items:flex-start;}
+  .dual-source-grid > .source-col{flex:1; min-width:280px;}
+  .merge-wrap{
+    margin-top:34px; display:flex; flex-direction:column; align-items:center; text-align:center;
+    opacity:0; transform:translateY(16px); transition:opacity .6s ease, transform .6s ease;
+  }
+  .merge-wrap.in{opacity:1; transform:translateY(0);}
+  .merge-lines-wide{width:100%; max-width:640px; height:64px; display:block; margin:0 auto;}
+  .merge-simple-line{display:none;}
+  .merge-target{
+    padding:16px 22px; border-radius:8px; background:var(--bg-deep); color:#fff;
+    font-size:14px; font-weight:800; box-shadow:0 14px 32px var(--shadow); text-align:center;
+  }
+  .merge-target span{display:block; font-size:11px; font-weight:600; color:var(--teal); margin-top:3px; letter-spacing:.02em;}
+
+  /* ---------- STEP 2: COE detection ---------- */
+  .flow-row{display:flex; align-items:flex-start; gap:0; flex-wrap:wrap; margin-top:10px;}
+  .flow-box{
+    width:240px; border-radius:6px; padding:18px 16px; text-align:center;
+    box-shadow:0 10px 26px var(--shadow);
+    opacity:0; transform:translateY(16px) scale(.96);
+    transition:opacity .5s ease, transform .5s cubic-bezier(.34,1.56,.64,1);
+  }
+  .flow-box.in{opacity:1; transform:translateY(0) scale(1);}
+  .flow-box h4{margin:0 0 4px; font-size:16px; color:#fff;}
+  .flow-box p{margin:0; font-size:11.5px; color:rgba(255,255,255,.8);}
+  .flow-box.b1{background:var(--purple);}
+  .flow-box.b2{background:var(--surface-alt);}
+  .flow-box.b2 h4, .flow-box.b2 p{color:var(--ink);}
+  .flow-box.b3{background:var(--pink);}
+  .flow-arrow{
+    width:60px; height:2px; background:var(--ink); margin:38px 4px 0; position:relative;
+    opacity:0; transition:opacity .4s ease .3s;
+  }
+  .flow-arrow.in{opacity:.4;}
+  .flow-arrow::after{content:''; position:absolute; right:0; top:-4px; border:5px solid transparent; border-left-color:var(--ink); opacity:.4;}
+  .flow-col{display:flex; flex-direction:column; align-items:center;}
+  .flow-result{
+    margin-top:12px; font-size:11.5px; font-weight:800; padding:5px 10px; border-radius:4px; border:1px solid; text-align:center;
+    opacity:0; transition:opacity .4s ease .5s;
+  }
+  .flow-result.in{opacity:1;}
+  .flow-result.fail{color:var(--red); border-color:var(--red); background:color-mix(in srgb, var(--red) 10%, transparent);}
+  .flow-result.pass{color:var(--green); border-color:var(--green); background:color-mix(in srgb, var(--green) 10%, transparent);}
+  .flow-caption{margin-top:8px; font-size:11.5px; color:var(--ink-soft);}
+
+  /* ---------- STEP 3: semantic matching ---------- */
+  .embed-box{
+    max-width:460px; background:var(--bg-deep); color:#fff; border-radius:6px; padding:16px 18px;
+    opacity:0; transform:translateY(14px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .embed-box.in{opacity:1; transform:translateY(0);}
+  .embed-box .tag{font-size:10.5px; font-weight:800; letter-spacing:.08em; color:var(--teal); margin-bottom:4px;}
+  .embed-box .q{font-size:14px; font-weight:600;}
+  .embed-box .meta{font-size:11.5px; color:rgba(255,255,255,.55); margin-top:6px;}
+  .scatter-wrap{margin-top:50px; position:relative;}
+  .scatter-wrap svg{width:100%; max-width:640px; height:340px; display:block;}
+  .match-tags{margin-top:20px; display:flex; gap:10px; flex-wrap:wrap; opacity:0; transition:opacity .5s ease .8s;}
+  .match-tags.in{opacity:1;}
+  .match-tags span{
+    font-size:12px; font-weight:700; background:var(--surface-alt); color:var(--ink);
+    padding:6px 12px; border-radius:5px; border:1px solid var(--line);
+  }
+  .dot-emp{opacity:0; transition:opacity .5s ease, transform .5s cubic-bezier(.34,1.56,.64,1); transform:scale(0);}
+  .dot-emp.in{opacity:1; transform:scale(1);}
+
+  /* ---------- STEP 4: formula scoring ---------- */
+  .formula-box{
+    font-family:'JetBrains Mono', monospace; font-size:14px; border:1px solid var(--line);
+    border-radius:6px; padding:18px 22px; max-width:720px;
+    opacity:0; transform:translateY(14px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .formula-box.in{opacity:1; transform:translateY(0);}
+  .bars{margin-top:44px; max-width:640px;}
+  .bar-row{display:grid; grid-template-columns:110px 1fr 60px; align-items:center; gap:14px; margin-bottom:18px;}
+  .bar-row .lbl{font-weight:800; font-size:14.5px; text-align:right;}
+  .bar-track{height:30px; background:var(--surface-alt); border-radius:3px; overflow:hidden;}
+  .bar-fill{height:100%; width:0%; border-radius:3px; transition:width 1s cubic-bezier(.2,.8,.3,1);}
+  .bar-row.in .bar-fill{ }
+  .bar-w{font-weight:800; font-size:13.5px;}
+
+  /* ---------- STEP 5-7: AI enrichment ---------- */
+  .enrich-wrap{display:flex; gap:26px; align-items:flex-start; flex-wrap:wrap;}
+  .gpt-box{
+    background:var(--bg-deep); color:#fff; border-radius:6px; padding:18px 20px; width:150px; text-align:left;
+    opacity:0; transform:scale(.9); transition:opacity .5s ease, transform .5s cubic-bezier(.34,1.56,.64,1);
+    flex-shrink:0; margin-top:40px;
+  }
+  .gpt-box.in{opacity:1; transform:scale(1);}
+  .gpt-box b{font-size:19px;}
+  .gpt-box span{display:block; font-size:11px; color:var(--teal); margin-top:2px;}
+  .enrich-list{display:flex; flex-direction:column; gap:16px; flex:1; min-width:280px;}
+  .enrich-item{display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;}
+  .enrich-card{
+    width:230px; border-radius:6px; padding:14px 16px; flex-shrink:0;
+    opacity:0; transform:translateX(-14px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .enrich-card.in{opacity:1; transform:translateX(0);}
+  .enrich-card h5{margin:0 0 3px; font-size:14.5px; color:#fff;}
+  .enrich-card p{margin:0; font-size:11px; color:rgba(255,255,255,.82);}
+  .enrich-out{
+    flex:1; min-width:240px; border:1px solid var(--line); border-radius:6px; padding:12px 14px; font-size:12.5px;
+    color:var(--ink-soft); background:var(--surface-alt);
+    opacity:0; transition:opacity .5s ease .25s;
+  }
+  .enrich-out.in{opacity:1;}
+  .enrich-out .rank{display:inline-block; font-size:11px; font-weight:800; padding:3px 8px; border-radius:4px; margin:2px 4px 2px 0; border:1px solid var(--line); background:var(--surface);}
+  .async-note{margin-top:36px; display:flex; align-items:center; gap:12px; opacity:0; transition:opacity .5s ease;}
+  .async-note.in{opacity:1;}
+  .async-note code{background:var(--bg-deep); color:var(--teal); padding:8px 14px; border-radius:5px; font-size:12.5px; font-weight:700;}
+  .async-note span{font-size:13px; color:var(--ink-soft);}
+
+  /* ---------- OUTPUT ---------- */
+  .out-grid{display:flex; gap:60px; flex-wrap:wrap;}
+  .out-main{flex:2; min-width:320px;}
+  .out-stats{flex:1; min-width:160px; display:flex; flex-direction:column; gap:22px; padding-top:6px;}
+  .out-stat b{display:block; font-size:34px; font-weight:800; color:var(--white);}
+  .out-stat span{font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.55);}
+  .out-table{border-radius:6px; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,.3);}
+  .out-th{
+    background:linear-gradient(90deg, var(--purple), var(--bg-deep)); color:#fff; padding:16px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .out-th b{font-size:16px;}
+  .out-th .badge2{font-size:11px; font-weight:800; background:rgba(255,255,255,.15); padding:5px 12px; border-radius:4px; color:var(--teal);}
+  .out-cols{display:grid; grid-template-columns:1fr 1.3fr 1fr 1fr 1fr 0.8fr; background:var(--surface-alt); color:var(--ink); font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:10px 20px;}
+  .out-row{
+    display:grid; grid-template-columns:1fr 1.3fr 1fr 1fr 1fr 0.8fr; background:var(--surface); color:var(--ink); font-size:13.5px; padding:14px 20px; align-items:center;
+    border-top:1px solid var(--line);
+    opacity:0; transform:translateY(10px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .out-row.in{opacity:1; transform:translateY(0);}
+  .out-row b{font-weight:800;}
+  .cat-avail{color:var(--green); font-weight:700; font-size:12px;}
+  .cat-best{color:var(--purple); font-weight:700; font-size:12px;}
+  [data-theme="dark"] .cat-best{color:var(--lavender);}
+  .out-row .score{font-weight:800; color:var(--purple);}
+  [data-theme="dark"] .out-row .score{color:var(--lavender);}
+  .rationale-box{
+    margin-top:44px; max-width:640px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:6px; padding:18px 22px;
+    opacity:0; transform:translateY(14px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .rationale-box.in{opacity:1; transform:translateY(0);}
+  .rationale-box .tag{font-size:11px; font-weight:800; letter-spacing:.06em; color:var(--teal); margin-bottom:8px;}
+  .rationale-box p{margin:0; font-size:14.5px; line-height:1.65; color:rgba(255,255,255,.9);}
+  .kb-proof{margin-top:16px; display:flex; align-items:center; gap:12px; font-size:13px; color:rgba(255,255,255,.7);
+    opacity:0; transition:opacity .5s ease .2s;}
+  .kb-proof.in{opacity:1;}
+  .kb-proof b{background:var(--green); color:#0A0726; font-size:10.5px; font-weight:800; padding:5px 10px; border-radius:4px;}
+  .out-sign{margin-top:100px; text-align:right; font-size:12.5px; color:rgba(255,255,255,.4);}
+  .out-sign b{display:block; color:#fff; font-size:15px;}
+
+  /* ---------- OUTPUT: delivery-channel tabs ---------- */
+  .deep .source-tabs .source-tab{background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.16); color:rgba(255,255,255,.6);}
+  .deep .source-tabs .source-tab.active{background:var(--teal); border-color:var(--teal); color:var(--bg-deep);}
+  .deep .source-tabs .source-tab:not(.active):hover{border-color:var(--teal); color:var(--teal);}
+
+  .mail-reply-card{
+    max-width:620px; border-radius:8px; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,.35);
+  }
+  .mail-reply-head{background:linear-gradient(90deg, var(--purple), var(--bg-deep)); padding:22px 26px; color:#fff;}
+  .mail-reply-head .tag{font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--teal);}
+  .mail-reply-head h4{margin:6px 0 0; font-size:19px; font-weight:800;}
+  .mail-reply-body{background:var(--surface); color:var(--ink); padding:22px 26px;}
+  .mail-reply-body > p{margin:0 0 16px; font-size:13.5px; color:var(--ink-soft);}
+  .mail-table{width:100%; border-collapse:collapse; font-size:13px;}
+  .mail-table thead th{
+    text-align:left; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink-soft); padding:0 8px 10px; border-bottom:1px solid var(--line);
+  }
+  .mail-row{
+    opacity:0; transform:translateY(8px); transition:opacity .45s ease, transform .45s ease;
+  }
+  .mail-row.in{opacity:1; transform:translateY(0);}
+  .mail-row td{padding:11px 8px; border-bottom:1px solid var(--line); font-size:13px;}
+  .mail-row td:first-child{font-weight:800; font-family:'JetBrains Mono', monospace; font-size:12px;}
+  .mail-row .cat-avail{color:var(--green); font-weight:800; font-size:12px;}
+  .mail-row .cat-best{color:var(--purple); font-weight:800; font-size:12px;}
+  [data-theme="dark"] .mail-row .cat-best{color:var(--lavender);}
+  .mail-row .mscore{font-weight:800;}
+  .mail-reply-foot{
+    background:var(--surface-alt); padding:14px 26px; font-size:11.5px; color:var(--ink-soft);
+    display:flex; align-items:center; gap:8px; border-top:1px solid var(--line);
+  }
+  .mail-reply-foot b{color:var(--ink);}
+  .out-channel-note{margin-top:20px; font-size:12.5px; color:rgba(255,255,255,.55); max-width:500px;}
+  .reveal2{opacity:0; transform:translateY(14px); transition:opacity .5s ease, transform .5s ease;}
+  .reveal2.in{opacity:1; transform:translateY(0);}
+
+  @media (max-width:760px){
+    section{padding:90px 6vw;}
+    .flow-row{flex-direction:column; align-items:flex-start;}
+    .flow-arrow{width:2px; height:40px; margin:6px 0 6px 118px;}
+    .flow-col{width:100%;}
+    .bar-row{grid-template-columns:80px 1fr 50px;}
+    .out-cols, .out-row{grid-template-columns:1fr 1fr 1fr; font-size:11px;}
+    .out-cols div:nth-child(n+4), .out-row > div:nth-child(n+4){display:none;}
+    .source-tabs{flex-wrap:wrap;}
+    .dual-source-grid{flex-direction:column;}
+    .merge-lines-wide{display:none;}
+    .merge-simple-line{display:block; width:2px; height:36px; margin:0 auto; background:linear-gradient(var(--purple), var(--pink)); opacity:.55;}
+    .mail-table{font-size:11.5px;}
+    .mail-table th:nth-child(2), .mail-table td:nth-child(2){display:none;}
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="toggle" id="themeToggle">
+  <div class="dot" id="toggleIcon">🌙</div>
+  <span id="toggleLabel">Dark</span>
+</div>
+
+<!-- HERO -->
+<section class="deep hero">
+  <div class="mark">J</div>
+  <h1>SapienSync Recommendation Engine</h1>
+  <p>How RMG scores and recommends the best resource</p>
+  <div class="scroll-cue"><div class="stick"></div>Scroll to see it work</div>
+  <footer>Jman Group · RMG Engine</footer>
+</section>
+
+<!-- STEP 1 -->
+<section class="step">
+  <div class="eyebrow">Step 1</div>
+  <h2 class="step-title">Two Ways In</h2>
+  <p class="step-sub">A request reaches the engine from a live pipeline record — or from an email asking for a resource extension. Either way, it lands in the same 6-step AI pipeline.</p>
+
+  <div class="dual-source-grid">
+    <div class="source-col">
+      <div class="req-card reveal">
+        <div class="req-head"><b>Pipeline Request #47</b><span class="badge">Not Resourced</span></div>
+        <div class="req-body" id="reqRows">
+          <div class="req-row"><span class="k">Client</span><span class="v">Sigma Healthcare</span></div>
+          <div class="req-row"><span class="k">Role</span><span class="v">Senior Data Engineer</span></div>
+          <div class="req-row"><span class="k">COE</span><span class="v">Data Engineering</span></div>
+          <div class="req-row"><span class="k">Skills Required</span><span class="v">Python, Spark, Azure, SQL</span></div>
+          <div class="req-row"><span class="k">Allocation</span><span class="v">100%</span></div>
+          <div class="req-row"><span class="k">Duration</span><span class="v">12 weeks</span></div>
+          <div class="req-row"><span class="k">Status</span><span class="v status">Not Resourced</span></div>
+        </div>
+      </div>
+      <div class="trigger-note in" id="triggerNote1">▸ RMG dashboard flags an unresourced role and triggers the pipeline</div>
+    </div>
+
+    <div class="source-col">
+      <div class="req-card reveal">
+        <div class="req-head"><b>✉️ Resource Request — EM (Sathish Kumar)</b><span class="badge parsed">Parsed</span></div>
+        <div class="mail-meta">From <b>rohithraja.c@jmangroup.com</b> · attachment: Resourcing Request Form.pdf</div>
+        <div class="req-body" id="mailRows">
+          <div class="req-row"><span class="k">Request Type</span><span class="v">Allocation Extension</span></div>
+          <div class="req-row"><span class="k">Urgency</span><span class="v">High</span></div>
+          <div class="req-row"><span class="k">Client / Project</span><span class="v">CLIENT_36_004</span></div>
+          <div class="req-row"><span class="k">COE</span><span class="v">Data Engineering</span></div>
+          <div class="req-row"><span class="k">Role Requested</span><span class="v">Senior Software Engineer x2</span></div>
+          <div class="req-row"><span class="k">Dates</span><span class="v">03 Jul 2026 → 30 Nov 2026</span></div>
+          <div class="req-row"><span class="k">Status</span><span class="v status" style="color:var(--green)">✓ Parsed</span></div>
+        </div>
+      </div>
+      <div class="trigger-note in" id="triggerNote2">▸ Mailbox listener extracts the form fields and triggers the same pipeline</div>
+    </div>
+  </div>
+
+  <div class="merge-wrap reveal" id="mergeWrap">
+    <svg class="merge-lines-wide" viewBox="0 0 640 70" preserveAspectRatio="none">
+      <path d="M160 0 C 160 40, 320 34, 320 70" fill="none" stroke="var(--purple)" stroke-width="2.5" opacity=".55"/>
+      <path d="M480 0 C 480 40, 320 34, 320 70" fill="none" stroke="var(--pink)" stroke-width="2.5" opacity=".55"/>
+    </svg>
+    <div class="merge-simple-line"></div>
+    <div class="merge-target">6-Step AI Engine<span>Same scoring pipeline, either source</span></div>
+  </div>
+</section>
+
+<!-- STEP 2 -->
+<section class="step" id="step2">
+  <div class="eyebrow">Step 2</div>
+  <h2 class="step-title">COE Detection</h2>
+  <p class="step-sub">Which Centre of Excellence does this role belong to?</p>
+  <div class="flow-row">
+    <div class="flow-col">
+      <div class="flow-box b1" data-seq="0"><h4>SQL Role-Based</h4><p>Match canonical_role → employee_skills</p></div>
+      <div class="flow-result fail" data-seq="1">✗ No match found</div>
+      <div class="flow-caption">Try 1: Fast SQL lookup</div>
+    </div>
+    <div class="flow-arrow" data-seq="1"></div>
+    <div class="flow-col">
+      <div class="flow-box b2" data-seq="2"><h4>SQL Global Fallback</h4><p>Most common COE across all employees</p></div>
+      <div class="flow-result fail" data-seq="3">✗ No match found</div>
+      <div class="flow-caption">Try 2: Broader SQL scan</div>
+    </div>
+    <div class="flow-arrow" data-seq="3"></div>
+    <div class="flow-col">
+      <div class="flow-box b3" data-seq="4"><h4>GPT-4o Inference</h4><p>LLM infers COE from role name + skills</p></div>
+      <div class="flow-result pass" data-seq="5">✓ Match: Data Engineering</div>
+      <div class="flow-caption">Try 3: AI fallback</div>
+    </div>
+  </div>
+</section>
+
+<!-- STEP 3 -->
+<section class="step" id="step3">
+  <div class="eyebrow">Step 3</div>
+  <h2 class="step-title">Semantic Skill Matching</h2>
+  <p class="step-sub">Embed role query → pgvector ANN finds nearest employee skill profiles</p>
+  <div class="embed-box reveal">
+    <div class="tag">Role Query Embedding</div>
+    <div class="q">"Sr Data Engineer Data Engineering Python Spark Azure SQL"</div>
+    <div class="meta">→ text-embedding-3-small → 1536-dim vector</div>
+  </div>
+  <div class="scatter-wrap">
+    <svg viewBox="0 0 640 340" id="scatterSvg">
+      <circle cx="320" cy="150" r="90" fill="none" stroke="var(--ink-soft)" stroke-opacity=".35" stroke-dasharray="4 5"/>
+      <circle cx="320" cy="150" r="14" fill="var(--pink)" opacity=".18" class="dot-emp" data-seq="0"/>
+      <circle cx="320" cy="150" r="7" fill="var(--pink)" class="dot-emp" data-seq="0"/>
+      <text x="336" y="154" font-size="12" font-weight="700" fill="var(--ink)" class="dot-emp" data-seq="0">Query</text>
+      <!-- purple employee dots -->
+      <g fill="var(--purple)">
+        <circle cx="150" cy="90" r="5" class="dot-emp" data-seq="1"/>
+        <circle cx="105" cy="180" r="5" class="dot-emp" data-seq="2"/>
+        <circle cx="140" cy="230" r="5" class="dot-emp" data-seq="3"/>
+        <circle cx="95" cy="270" r="5" class="dot-emp" data-seq="1"/>
+        <circle cx="290" cy="215" r="5" class="dot-emp" data-seq="2"/>
+        <circle cx="405" cy="225" r="5" class="dot-emp" data-seq="3"/>
+        <circle cx="330" cy="270" r="5" class="dot-emp" data-seq="1"/>
+        <circle cx="475" cy="150" r="5" class="dot-emp" data-seq="2"/>
+        <circle cx="510" cy="245" r="5" class="dot-emp" data-seq="3"/>
+      </g>
+      <!-- teal top-match dots -->
+      <g fill="var(--teal)">
+        <circle cx="270" cy="120" r="6" class="dot-emp" data-seq="4"/>
+        <circle cx="360" cy="105" r="6" class="dot-emp" data-seq="5"/>
+        <circle cx="300" cy="175" r="6" class="dot-emp" data-seq="6"/>
+      </g>
+      <text x="20" y="330" font-size="11" fill="var(--ink-soft)">Dimension 1</text>
+      <text x="10" y="20" font-size="11" fill="var(--ink-soft)" transform="rotate(-90 10,150)">Dimension 2</text>
+    </svg>
+  </div>
+  <div class="match-tags" id="matchTags">
+    <span>Top 3 semantic matches</span>
+    <span>EMP_042: 87%</span><span>EMP_015: 82%</span><span>EMP_088: 76%</span>
+  </div>
+</section>
+
+<!-- STEP 4 -->
+<section class="step" id="step4">
+  <div class="eyebrow">Step 4</div>
+  <h2 class="step-title">Formula Scoring</h2>
+  <div class="formula-box reveal">
+    total = <span style="color:var(--purple)">skill x0.40</span> + <span style="color:var(--pink)">competency x0.25</span> + <span style="color:var(--teal)">availability x0.25</span> + <span style="color:var(--lavender)">productivity x0.10</span>
+  </div>
+  <div class="bars" id="bars">
+    <div class="bar-row" data-pct="80" data-color="var(--purple)"><div class="lbl">Skill</div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-w">x0.40</div></div>
+    <div class="bar-row" data-pct="55" data-color="var(--pink)"><div class="lbl">Competency</div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-w">x0.25</div></div>
+    <div class="bar-row" data-pct="100" data-color="var(--teal)"><div class="lbl">Availability</div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-w">x0.25</div></div>
+    <div class="bar-row" data-pct="85" data-color="var(--lavender)"><div class="lbl">Productivity</div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-w">x0.10</div></div>
+  </div>
+</section>
+
+<!-- STEP 5-7 -->
+<section class="step" id="step5">
+  <div class="eyebrow">Steps 5–7</div>
+  <h2 class="step-title">AI Enrichment</h2>
+  <p class="step-sub">Three parallel GPT-4o tasks enrich the top 10 candidates</p>
+  <div class="enrich-wrap">
+    <div class="gpt-box" data-seq="0"><b>GPT-4o</b><span>Top 10 candidates</span></div>
+    <div class="enrich-list">
+      <div class="enrich-item">
+        <div class="enrich-card" style="background:var(--purple)" data-seq="1"><h5>Rationale Generation</h5><p>2–3 sentence explanation per candidate</p></div>
+        <div class="enrich-out" data-seq="1">"EMP_042 has strong Spark and Python skills (87% match), is currently 100% available, and has delivered similar Data Engineering projects for healthcare clients."</div>
+      </div>
+      <div class="enrich-item">
+        <div class="enrich-card" style="background:var(--pink)" data-seq="2"><h5>LLM Re-Ranking</h5><p>Holistic reorder based on overall fit</p></div>
+        <div class="enrich-out" data-seq="2"><span class="rank">#1 EMP_042</span><span class="rank">#2 EMP_015</span><span class="rank">#3 EMP_088</span></div>
+      </div>
+      <div class="enrich-item">
+        <div class="enrich-card" style="background:var(--teal); color:#0A0726;" data-seq="3"><h5 style="color:#0A0726">KB Proof Search</h5><p style="color:#0A0726; opacity:.8">pgvector: past project evidence per candidate</p></div>
+        <div class="enrich-out" data-seq="3">Proof: EMP_042 worked on PROJECT_089 (Data Eng, Sigma) — 92% similarity</div>
+      </div>
+    </div>
+  </div>
+  <div class="async-note" id="asyncNote"><code>asyncio.gather()</code><span>All three run in parallel for speed</span></div>
+</section>
+
+<!-- OUTPUT -->
+<section class="deep" id="stepOut">
+  <div class="eyebrow">Output</div>
+  <h2 class="step-title">Final Recommendation</h2>
+  <p class="step-sub">The same scored candidate list is delivered back through whichever channel raised the request.</p>
+
+  <div class="source-tabs" id="outTabs">
+    <div class="source-tab active" data-target="outPanelDashboard"><span class="n"></span>Dashboard View</div>
+    <div class="source-tab" data-target="outPanelMail"><span class="n"></span>Email Reply</div>
+  </div>
+
+  <div class="source-panel active" id="outPanelDashboard">
+    <div class="out-grid">
+      <div class="out-main">
+        <div class="out-table">
+          <div class="out-th"><b>Senior Data Engineer — Sigma Healthcare</b><span class="badge2">Data Engineering</span></div>
+          <div class="out-cols"><div>Employee</div><div>Role</div><div>Location</div><div>Category</div><div>Available</div><div>Score</div></div>
+          <div id="outRows">
+            <div class="out-row"><b>EMP_042</b><div>Sr Data Engineer</div><div>India</div><div class="cat-avail">Available</div><div>100%</div><div class="score">84%</div></div>
+            <div class="out-row"><b>EMP_015</b><div>Solutions Enabler</div><div>India</div><div class="cat-avail">Available</div><div>80%</div><div class="score">76%</div></div>
+            <div class="out-row"><b>EMP_088</b><div>Sr Software Engineer</div><div>India</div><div class="cat-best">BestMatch</div><div>30%</div><div class="score">71%</div></div>
+          </div>
+        </div>
+        <div class="rationale-box reveal">
+          <div class="tag">AI Rationale — #1 EMP_042</div>
+          <p>Strong Spark and Python skills with 87% semantic match. Currently 100% available with proven delivery on similar Data Engineering projects for healthcare clients. Recommended as top pick.</p>
+        </div>
+        <div class="kb-proof" id="kbProof"><b>KB Proof</b> PROJECT_089 (Sigma, Data Eng) — 92% similarity match</div>
+      </div>
+      <div class="out-stats">
+        <div class="out-stat"><b class="count" data-count="187">0</b><span>Evaluated</span></div>
+        <div class="out-stat"><b class="count" data-count="2">0</b><span>Available</span></div>
+        <div class="out-stat"><b class="count" data-count="1">0</b><span>BestMatch</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="source-panel" id="outPanelMail">
+    <div class="mail-reply-card reveal2">
+      <div class="mail-reply-head">
+        <div class="tag">RMG Engine · Jman Group</div>
+        <h4>Resource Recommendation — CLIENT_36_004</h4>
+      </div>
+      <div class="mail-reply-body">
+        <p>Hi Rohith, here are the AI-recommended resources for your Senior Software Engineer extension request:</p>
+        <table class="mail-table">
+          <thead><tr><th>ID</th><th>Role</th><th>Category</th><th>Score</th></tr></thead>
+          <tbody id="mailOutRows">
+            <tr class="mail-row"><td>EMP11</td><td>Senior Software Engineer</td><td class="cat-avail">Available</td><td class="mscore">67%</td></tr>
+            <tr class="mail-row"><td>EMP863</td><td>Senior Software Engineer</td><td class="cat-best">BestMatch</td><td class="mscore">48%</td></tr>
+            <tr class="mail-row"><td>EMP1008</td><td>Senior Software Engineer</td><td class="cat-best">BestMatch</td><td class="mscore">42%</td></tr>
+            <tr class="mail-row"><td>EMP491</td><td>Senior Software Engineer</td><td class="cat-best">BestMatch</td><td class="mscore">42%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mail-reply-foot"><b>Auto-sent</b> from the RMG Engine mailbox · same scoring model as the dashboard</div>
+    </div>
+    <p class="out-channel-note">Built from the centralized recommendation template — the reply is generated and sent the moment the pipeline finishes scoring, no manual lookup required.</p>
+  </div>
+
+  <div class="out-sign"><b>RMG Engine</b>Jman Group</div>
+</section>
+
+<script>
+  const body = document.body;
+  const toggle = document.getElementById('themeToggle');
+  const icon = document.getElementById('toggleIcon');
+  const label = document.getElementById('toggleLabel');
+  let dark = true;
+  toggle.addEventListener('click', () => {
+    dark = !dark;
+    body.setAttribute('data-theme', dark ? 'dark' : 'light');
+    icon.textContent = dark ? '🌙' : '☀️';
+    label.textContent = dark ? 'Dark' : 'Light';
+  });
+
+  // ---- helper: clear any pending timeouts stored on an element ----
+  function clearPending(el){
+    if(el._timers){ el._timers.forEach(t=>clearTimeout(t)); }
+    el._timers = [];
+  }
+
+  // generic single-element reveal — replays every time it enters/leaves view
+  const reveals = document.querySelectorAll('.reveal');
+  const io1 = new IntersectionObserver(es=>{
+    es.forEach(e=>{
+      e.target.classList.toggle('in', e.isIntersecting);
+    });
+  }, {threshold:.25});
+  reveals.forEach(el=>io1.observe(el));
+
+  // staggered group reveal: replays the stagger every time the container re-enters view
+  function staggerReveal(container, selector, gap=140){
+    const els = container.querySelectorAll(selector);
+    container._timers = [];
+    const obs = new IntersectionObserver(es=>{
+      es.forEach(e=>{
+        clearPending(container);
+        if(e.isIntersecting){
+          els.forEach((el,i)=>{
+            const t = setTimeout(()=>el.classList.add('in'), i*gap);
+            container._timers.push(t);
+          });
+        } else {
+          els.forEach(el=>el.classList.remove('in'));
+        }
+      });
+    }, {threshold:.2});
+    obs.observe(container);
+  }
+  staggerReveal(document.getElementById('reqRows'), '.req-row', 120);
+  staggerReveal(document.getElementById('mailRows'), '.req-row', 120);
+  staggerReveal(document.getElementById('step2'), '[data-seq]', 260);
+  staggerReveal(document.getElementById('step3'), '.dot-emp', 90);
+  staggerReveal(document.getElementById('bars'), '.bar-row', 220);
+  staggerReveal(document.getElementById('step5'), '[data-seq]', 260);
+  staggerReveal(document.getElementById('outRows'), '.out-row', 180);
+
+  // trigger note + match tags + async note + kb proof — replay every time
+  ['matchTags','asyncNote','kbProof'].forEach(id=>{
+    const el = document.getElementById(id);
+    const obs = new IntersectionObserver(es=>{
+      es.forEach(e=>{ e.target.classList.toggle('in', e.isIntersecting); });
+    }, {threshold:.4});
+    obs.observe(el);
+  });
+
+  // bar fill widths — replay fill/empty every time the row crosses into/out of view
+  document.querySelectorAll('.bar-row').forEach(row=>{
+    const pct = row.getAttribute('data-pct');
+    const color = row.getAttribute('data-color');
+    const fill = row.querySelector('.bar-fill');
+    fill.style.background = color;
+    row._timers = [];
+    const obs = new IntersectionObserver(es=>{
+      es.forEach(e=>{
+        clearPending(row);
+        if(e.isIntersecting){
+          const t = setTimeout(()=>{ fill.style.width = pct+'%'; }, 100);
+          row._timers.push(t);
+        } else {
+          fill.style.width = '0%';
+        }
+      });
+    }, {threshold:.3});
+    obs.observe(row);
+  });
+
+  // ---- generic tab switcher: pairs a .source-tabs group with its .source-panel siblings ----
+  function wireTabs(tabsId, onSwitch){
+    const wrap = document.getElementById(tabsId);
+    if(!wrap) return;
+    wrap.querySelectorAll('.source-tab').forEach(tab=>{
+      tab.addEventListener('click', ()=>{
+        if(tab.classList.contains('active')) return;
+        wrap.querySelectorAll('.source-tab').forEach(t=>t.classList.remove('active'));
+        tab.classList.add('active');
+        const targetId = tab.getAttribute('data-target');
+        const parent = wrap.parentElement;
+        parent.querySelectorAll(':scope > .source-panel').forEach(p=>p.classList.remove('active'));
+        const panel = document.getElementById(targetId);
+        panel.classList.add('active');
+        if(onSwitch) onSwitch(panel);
+      });
+    });
+  }
+
+  function replayRowStagger(panel, rowSelector, gap=110){
+    const rows = panel.querySelectorAll(rowSelector);
+    rows.forEach(r=>r.classList.remove('in'));
+    rows.forEach((r,i)=>{ setTimeout(()=>r.classList.add('in'), 60 + i*gap); });
+  }
+
+  wireTabs('outTabs', (panel)=>{
+    const mailCard = panel.querySelector('.reveal2');
+    if(mailCard) mailCard.classList.add('in');
+    replayRowStagger(panel, '.mail-row', 90);
+  });
+
+  // count-up stats — replay the count each time it re-enters view
+  document.querySelectorAll('.count').forEach(el=>{
+    el._timers = [];
+    const obs = new IntersectionObserver(es=>{
+      es.forEach(e=>{
+        clearPending(el);
+        if(e.isIntersecting){
+          const target = parseInt(el.getAttribute('data-count'),10);
+          let cur = 0; const step = Math.max(1, Math.round(target/30));
+          const t = setInterval(()=>{
+            cur += step; if(cur>=target){cur=target; clearInterval(t);}
+            el.textContent = cur;
+          }, 25);
+          el._timers.push(t);
+        } else {
+          el.textContent = '0';
+        }
+      });
+    }, {threshold:.5});
+    obs.observe(el);
+  });
+</script>
+</body>
+</html>
