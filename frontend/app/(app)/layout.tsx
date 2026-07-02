@@ -1,5 +1,6 @@
 import Sidebar from "@/components/layout/sidebar";
 import ChatPanel from "@/components/chat-panel";
+import DocPanel from "@/components/doc-panel";
 import { getSession } from "@/lib/session";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -11,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {children}
       </main>
       <ChatPanel />
+      <DocPanel />
     </>
   );
 }

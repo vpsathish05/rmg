@@ -1340,11 +1340,6 @@ export default function RmgEnginePage() {
             onClick={() => setShowLogicModal(true)}>
             <FileText className="w-3 h-3" /> Logic
           </Button>
-          <a href="/ai-pipeline.html" target="_blank" rel="noopener noreferrer">
-            <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 rounded-xl">
-              <Sparkles className="w-3 h-3" /> How It Works
-            </Button>
-          </a>
           <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 rounded-xl"
             onClick={() => refreshRecs.mutate()} disabled={refreshRecs.isPending || cacheStatus?.is_running}>
             {refreshRecs.isPending || cacheStatus?.is_running ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
