@@ -367,9 +367,9 @@
   @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
 </style>
 </head>
-<body data-theme="dark">
+<body data-theme="light">
 
-<div class="toggle" id="themeToggle">
+<div class="toggle" id="themeToggle" style="display:none">>
   <div class="dot" id="toggleIcon">🌙</div>
   <span id="toggleLabel">Dark</span>
 </div>
@@ -612,12 +612,9 @@
   const toggle = document.getElementById('themeToggle');
   const icon = document.getElementById('toggleIcon');
   const label = document.getElementById('toggleLabel');
-  let dark = true;
+  let dark = false;
   toggle.addEventListener('click', () => {
-    dark = !dark;
-    body.setAttribute('data-theme', dark ? 'dark' : 'light');
-    icon.textContent = dark ? '🌙' : '☀️';
-    label.textContent = dark ? 'Dark' : 'Light';
+    // Theme toggle disabled — always light
   });
 
   // ---- helper: clear any pending timeouts stored on an element ----
