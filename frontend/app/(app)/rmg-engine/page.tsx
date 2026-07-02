@@ -63,169 +63,6 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
 }
 
 
-// ── Pipeline Logic Modal ───────────────────────────────────────────────────
-function PipelineLogicModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-8 py-5 flex items-center justify-between rounded-t-3xl z-10">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">AI Recommendation Pipeline</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Visual flow: how data goes in and recommendations come out</p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-all">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="px-8 py-6 space-y-8">
-
-          {/* ── High-Level Flow ── */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-4">End-to-End Flow</h3>
-            <div className="flex items-start gap-2 overflow-x-auto pb-2">
-              {[
-                { label: "Pipeline Role", color: "#FF6196" },
-                { label: "COE Detect", color: "#19105B" },
-                { label: "Skills Extract", color: "#19105B" },
-                { label: "Semantic Match", color: "#19105B" },
-                { label: "Formula Score", color: "#19105B" },
-                { label: "Rationale", color: "#19105B" },
-                { label: "Re-Rank", color: "#19105B" },
-                { label: "KB Proof", color: "#19105B" },
-                { label: "Output", color: "#FF6196" },
-              ].map((s, i) => (
-                <div key={i} className="flex items-center shrink-0">
-                  <div className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white whitespace-nowrap" style={{ background: s.color }}>{s.label}</div>
-                  {i < 8 && <ChevronRight className="w-3.5 h-3.5 text-gray-300 mx-0.5 shrink-0" />}
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-3 mt-3 text-[10px]">
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> AI/LLM</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> Embeddings</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> DB/Math</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#19105B"}} /> Evidence</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded" style={{background:"#FF6196"}} /> Input/Output</span>
-            </div>
-          </section>
-
-          {/* ── Step-by-Step ── */}
-          <section className="space-y-3">
-            <h3 className="text-sm font-bold text-gray-900">Step-by-Step</h3>
-            {[
-              { num: 1, title: "COE Detection", tag: "SQL → fallback → GPT-4o", color: "violet", desc: "Queries employee_skills: which COE do most people with this role have? If empty → global fallback → GPT-4o infers from available COEs." },
-              { num: 2, title: "Skills Extraction", tag: "Only when null", color: "violet", desc: "If pipeline has skills → use them. If null → GPT-4o: \"For this role + COE, list 3-5 technical skills.\"" },
-              { num: 3, title: "Semantic Skill Match", tag: "Embeddings API + pgvector", color: "blue", desc: "Embeds role query (role+COE+skills) into 1536-d vector → cosine similarity vs 286 pre-computed employee skill profile vectors." },
-              { num: 4, title: "Formula Scoring", tag: "Pure math — free", color: "emerald", desc: "5 batch SQL queries → score all employees: skill×0.40 + comp×0.25 + avail×0.25 + prod×0.10. Categorize: Available / BestMatch / Stretch." },
-              { num: 5, title: "Rationale Generation", tag: "GPT-4o × 10 parallel", color: "violet", desc: "Per top-10 candidate: \"Write 2-3 sentences about skill fit, availability, concerns for this role.\"" },
-              { num: 6, title: "LLM Re-Ranking", tag: "GPT-4o × 1", color: "violet", desc: "\"Re-order these 10 candidates considering skill alignment, seniority match, location, team composition.\" Catches title-match the formula misses." },
-              { num: 7, title: "KB Proof Search", tag: "pgvector cosine", color: "amber", desc: "For top 6: finds past projects they worked on with similar skills/COE — evidence of relevant experience." },
-              { num: 8, title: "Hire Signal", tag: "Only when 0 matches", color: "amber", desc: "GPT-4o: \"No match found. Generate actionable hiring profile: seniority, skills, years, contract type.\"" },
-            ].map(s => (
-              <div key={s.num} className={`rounded-xl border p-3 flex gap-3 items-start`} style={{borderColor: "#19105B20", background: "#19105B08"}}>
-                <span className="w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0" style={{background: "#19105B"}}>{s.num}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-gray-900">{s.title}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-500">{s.tag}</span>
-                  </div>
-                  <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">{s.desc}</p>
-                </div>
-              </div>
-            ))}
-          </section>
-
-          {/* ── Formula Visual ── */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-3">Scoring Formula</h3>
-            <div className="grid grid-cols-4 gap-2 mb-3">
-              {[
-                { label: "SKILL", weight: "×0.40", sub: "50% COE + 50% semantic", color: "#7c3aed" },
-                { label: "COMP", weight: "×0.25", sub: "Competency assessments", color: "#a855f7" },
-                { label: "AVAIL", weight: "×0.25", sub: "(100 - alloc%) / 100", color: "#059669" },
-                { label: "PROD", weight: "×0.10", sub: "Hours last 8 weeks", color: "#6b7280" },
-              ].map(f => (
-                <div key={f.label} className="p-2.5 rounded-xl border text-center" style={{borderColor: f.color + "33", background: f.color + "0a"}}>
-                  <p className="text-[10px] font-bold" style={{color: f.color}}>{f.label}</p>
-                  <p className="text-sm font-bold text-gray-900 mt-0.5">{f.weight}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{f.sub}</p>
-                </div>
-              ))}
-            </div>
-            <div className="bg-gray-900 rounded-xl p-3 font-mono text-[11px] text-gray-200 space-y-1">
-              <p><span className="text-violet-300">With comp:</span> total = skill×0.40 + comp×0.25 + avail×0.25 + prod×0.10</p>
-              <p><span className="text-violet-300">Without:</span>&nbsp; total = skill×0.65 + avail×0.25 + prod×0.10</p>
-            </div>
-          </section>
-
-          {/* ── Categories ── */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-3">Output Categories</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 mb-1" />
-                <p className="text-xs font-bold text-emerald-800">Available</p>
-                <p className="text-[10px] text-emerald-600">Free capacity ≥ requested %</p>
-              </div>
-              <div className="p-3 rounded-xl bg-violet-50 border border-violet-100">
-                <Sparkles className="w-4 h-4 text-violet-600 mb-1" />
-                <p className="text-xs font-bold text-violet-800">Best Match</p>
-                <p className="text-[10px] text-violet-600">Allocated, score ≥ 40%</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
-                <AlertTriangle className="w-4 h-4 text-gray-400 mb-1" />
-                <p className="text-xs font-bold text-gray-700">Stretch</p>
-                <p className="text-[10px] text-gray-500">Weak fit — hidden</p>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Timing & Cost ── */}
-          <section className="grid grid-cols-2 gap-4">
-            <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
-              <p className="text-xs font-bold text-violet-900 mb-2">When it runs</p>
-              <div className="space-y-1 text-[11px] text-violet-800">
-                <p><strong>Nightly 2 AM IST</strong> — all roles (~28 min)</p>
-                <p><strong>Refresh button</strong> — on demand</p>
-                <p><strong>Expand role</strong> — inline ~3-7s</p>
-              </div>
-            </div>
-            <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
-              <p className="text-xs font-bold text-emerald-900 mb-2">Cost</p>
-              <div className="space-y-1 text-[11px] text-emerald-800">
-                <p><strong>~$0.015</strong> per role</p>
-                <p><strong>~$3.60</strong> nightly (240 roles)</p>
-                <p>Steps 1-4 = <strong>free</strong> (SQL + math)</p>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Data Sources ── */}
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 mb-3">Data Sources</h3>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              {[
-                "employee_skills — COE assessments (82K)",
-                "employee_skill_embeddings — 286 profiles",
-                "allocations — active, end_date ≥ today",
-                "timesheets — last 8 weeks hours",
-                "employee_competencies — 196 employees",
-                "project_embeddings — 500 projects KB",
-              ].map(item => (
-                <div key={item} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-100">
-                  <Database className="w-3 h-3 text-gray-400 shrink-0" />
-                  <span className="text-gray-600">{item}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Candidate Card ─────────────────────────────────────────────────────────
 function CandidateCard({ candidate, rank, category }: {
@@ -1187,7 +1024,7 @@ export default function RmgEnginePage() {
   const [tab, setTab] = useState<TabType>("pipeline");
   const [search, setSearch] = useState("");
   const [showNROnly, setShowNROnly] = useState(false);
-  const [showLogicModal, setShowLogicModal] = useState(false);
+  const [showDocModal, setShowDocModal] = useState(false);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [expandedRoleKey, setExpandedRoleKey] = useState<string | null>(null);
   const [recCache, setRecCache] = useState<Record<string, CacheEntry>>({});
@@ -1337,8 +1174,8 @@ export default function RmgEnginePage() {
             <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><Database className="w-3 h-3" /> {kbStatus.embeddings} KB</span>
           )}
           <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 rounded-xl"
-            onClick={() => setShowLogicModal(true)}>
-            <FileText className="w-3 h-3" /> Logic
+            onClick={() => setShowDocModal(true)}>
+            <FileText className="w-3 h-3" /> How It Works
           </Button>
           <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 rounded-xl"
             onClick={() => refreshRecs.mutate()} disabled={refreshRecs.isPending || cacheStatus?.is_running}>
@@ -1370,7 +1207,22 @@ export default function RmgEnginePage() {
       {tab === "extensions" && <ExtensionsView />}
       {tab === "changes" && <ChangesView />}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-      <PipelineLogicModal open={showLogicModal} onClose={() => setShowLogicModal(false)} />
+      {showDocModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowDocModal(false)}>
+          <div className="relative w-[92vw] h-[90vh] bg-white shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-3 shrink-0" style={{ background: "#19105B" }}>
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-4 h-4 text-white" />
+                <span className="text-sm font-bold text-white">AI Recommendation Engine — How It Works</span>
+              </div>
+              <button onClick={() => setShowDocModal(false)} className="w-8 h-8 flex items-center justify-center text-white opacity-70 hover:opacity-100 transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <iframe src="/ai-pipeline.html" className="flex-1 w-full border-none" title="AI Pipeline Documentation" />
+          </div>
+        </div>
+      )}
     </>
   );
 }
