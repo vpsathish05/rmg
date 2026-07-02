@@ -444,3 +444,190 @@ export function useRecCacheStatus() {
       q.state.data?.is_running ? 10_000 : false, // poll every 10s while running
   });
 }
+
+
+// ── ML Forecast ───────────────────────────────────────────────────────────────
+
+export interface MLForecastPoint {
+  month: string;
+  p10: number;
+  p50: number;
+  p90: number;
+}
+
+export interface MLRevenueForecast {
+  method: string;
+  model_version: string;
+  training_months: number;
+  last_actual_month: string;
+  last_actual_value: number;
+  annual_total_p50: number;
+  growth_rate_yoy: number;
+  train_mape: number;
+  trend_monthly: number;
+  forecasts: MLForecastPoint[];
+}
+
+export interface MLClusterMonth {
+  month: string;
+  weight: number;
+  revenue_p10: number;
+  revenue_p50: number;
+  revenue_p90: number;
+}
+
+export interface MLClusterForecast {
+  method: string;
+  avg_weights: Record<string, number>;
+  total_by_cluster: Record<string, number>;
+  clusters: Record<string, MLClusterMonth[]>;
+}
+
+export interface MLProjectForecastPoint {
+  month: string;
+  p10: number;
+  p50: number;
+  p90: number;
+  by_type: Record<string, number>;
+}
+
+export interface MLProjectForecast {
+  method: string;
+  train_months: number;
+  annual_total_p50: number;
+  growth_rate_yoy: number;
+  avg_monthly: number;
+  seasonality: Record<number, number>;
+  historical: { month: string; count: number }[];
+  forecasts: MLProjectForecastPoint[];
+}
+
+export interface MLResourceMonth {
+  month: string;
+  total_fte: number;
+  bench_count: number;
+  utilization_pct: number;
+  by_role: Record<string, number>;
+}
+
+export interface MLResourceForecast {
+  method: string;
+  total_fte_12m: number;
+  avg_monthly_fte: number;
+  avg_utilization: number;
+  hiring_gap: Record<string, number>;
+  months: MLResourceMonth[];
+}
+
+export interface MLCOEMonthData {
+  month: string;
+  total_headcount: number;
+  already_billable: number;
+  available_supply: number;
+  projected_supply: number;
+  demand_fte: number;
+  gap: number;
+}
+
+export interface MLCOEGap {
+  method: string;
+  coverage_note: string;
+  hiring_needs: Record<string, number>;
+  total_gap_by_coe: Record<string, number>;
+  total_demand_by_coe: Record<string, number>;
+  total_supply_by_coe: Record<string, number>;
+  coes: Record<string, MLCOEMonthData[]>;
+}
+
+export interface MLForecastSummary {
+  revenue: {
+    annual_total_p50: number;
+    growth_rate_yoy: number;
+    next_month_p50: number;
+    last_actual: number;
+    trend_monthly: number;
+  };
+  projects: {
+    annual_total_p50: number;
+    growth_rate_yoy: number;
+    avg_monthly: number;
+  };
+  resources: {
+    avg_monthly_fte: number;
+    avg_utilization: number;
+    total_hiring_gap: number;
+    top_hiring_roles: Record<string, number>;
+  };
+  coe_gap: {
+    total_hiring_needs: number;
+    worst_coes: Record<string, number>;
+    coverage_note: string;
+  };
+  pipeline: {
+    total_weighted_revenue: number;
+    total_weighted_fte: number;
+    months_covered: number;
+  };
+}
+
+export interface MLActuals {
+  actuals: { month: string; revenue: number }[];
+  calibrated: { month: string; revenue: number }[];
+  calibration_factor: number;
+}
+
+export function useMLRevenueForecast() {
+  return useQuery<MLRevenueForecast>({
+    queryKey: ["ml-revenue-forecast"],
+    queryFn: () => api.get("/api/forecast/ml/revenue").then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useMLClusterForecast() {
+  return useQuery<MLClusterForecast>({
+    queryKey: ["ml-cluster-forecast"],
+    queryFn: () => api.get("/api/forecast/ml/revenue/clusters").then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useMLProjectForecast() {
+  return useQuery<MLProjectForecast>({
+    queryKey: ["ml-project-forecast"],
+    queryFn: () => api.get("/api/forecast/ml/projects").then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useMLResourceForecast() {
+  return useQuery<MLResourceForecast>({
+    queryKey: ["ml-resource-forecast"],
+    queryFn: () => api.get("/api/forecast/ml/resources").then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useMLCOEGap() {
+  return useQuery<MLCOEGap>({
+    queryKey: ["ml-coe-gap"],
+    queryFn: () => api.get("/api/forecast/ml/coe-gap").then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useMLForecastSummary() {
+  return useQuery<MLForecastSummary>({
+    queryKey: ["ml-forecast-summary"],
+    queryFn: () => api.get("/api/forecast/ml/summary").then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useMLActuals() {
+  return useQuery<MLActuals>({
+    queryKey: ["ml-actuals"],
+    queryFn: () => api.get("/api/forecast/ml/actuals").then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+}

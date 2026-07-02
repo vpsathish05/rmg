@@ -1,17 +1,18 @@
 "use client";
 import { useState, useMemo } from "react";
-import { useForecast, useForecastOutlook, useForecastInsights, type OutlookMonth } from "@/lib/hooks";
+import { useForecast, useForecastOutlook, useForecastInsights, useMLRevenueForecast, useMLClusterForecast, useMLResourceForecast, useMLCOEGap, useMLProjectForecast, useMLActuals, type OutlookMonth } from "@/lib/hooks";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Sparkles, TrendingUp, Target, BarChart3, Search, AlertTriangle, Clock, DollarSign, Users, Calendar } from "lucide-react";
+import { Sparkles, TrendingUp, Target, BarChart3, Search, AlertTriangle, Clock, DollarSign, Users, Calendar, Brain, FileText, X } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   AreaChart, Area, LineChart, Line, CartesianGrid, Legend,
 } from "recharts";
 
 export default function ForecastPage() {
-  const [tab, setTab] = useState<"insights" | "pipeline" | "outlook">("insights");
+  const [tab, setTab] = useState<"ai" | "insights" | "pipeline" | "outlook">("ai");
+  const [showDocModal, setShowDocModal] = useState(false);
   const { data: pipelineData } = useForecast();
   const { data: outlookData = [], isLoading: outlookLoading } = useForecastOutlook();
   const { data: insights } = useForecastInsights();
@@ -21,9 +22,17 @@ export default function ForecastPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-8 py-5 bg-white border-b border-gray-100 shrink-0">
-        <h1 className="text-xl font-bold" style={{ color: "#19105B" }}>Forecast</h1>
-        <p className="text-xs text-gray-400 mt-0.5">{total} resource requests · {highProb} high probability</p>
+      <div className="px-8 py-5 bg-white border-b border-gray-100 shrink-0 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold" style={{ color: "#19105B" }}>Forecast</h1>
+          <p className="text-xs text-gray-400 mt-0.5">{total} resource requests · {highProb} high probability</p>
+        </div>
+        <button
+          onClick={() => setShowDocModal(true)}
+          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900 transition-all"
+        >
+          <FileText className="w-3 h-3" /> How It Works
+        </button>
       </div>
 
       <div className="px-6 pt-4 pb-8 overflow-y-auto flex-1 space-y-5">
@@ -83,6 +92,7 @@ export default function ForecastPage() {
         {/* Tabs */}
         <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl w-fit">
           {([
+            { key: "ai", label: "AI Forecast", icon: Brain },
             { key: "insights", label: "Insights", icon: Sparkles },
             { key: "pipeline", label: "Pipeline", icon: BarChart3 },
             { key: "outlook", label: "6-Month Outlook", icon: TrendingUp },
@@ -96,12 +106,261 @@ export default function ForecastPage() {
           ))}
         </div>
 
+        {tab === "ai" && <AIForecastView />}
         {tab === "insights" && insights && <InsightsView insights={insights} />}
         {tab === "pipeline" && <PipelineList />}
         {tab === "outlook" && (outlookLoading
           ? <div className="py-12 text-sm text-gray-400 flex items-center gap-2"><TrendingUp className="w-4 h-4 animate-pulse" /> Loading…</div>
           : <OutlookChart months={outlookData} />
         )}
+      </div>
+
+      {/* How It Works Modal */}
+      {showDocModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowDocModal(false)}>
+          <div className="relative w-[92vw] h-[90vh] bg-white shadow-2xl flex flex-col overflow-hidden rounded-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-3 shrink-0" style={{ background: "#19105B" }}>
+              <div className="flex items-center gap-3">
+                <Brain className="w-4 h-4 text-white" />
+                <span className="text-sm font-bold text-white">Cluster Revenue & COE Forecast Engine — How It Works</span>
+              </div>
+              <button onClick={() => setShowDocModal(false)} className="w-8 h-8 flex items-center justify-center text-white opacity-70 hover:opacity-100 transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <iframe src="/forecast-flow.html" className="flex-1 w-full border-none" title="Forecast Flow Documentation" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ── AI Forecast View ───────────────────────────────────────────────────────
+function AIForecastView() {
+  const { data: revenue, isLoading: revLoading } = useMLRevenueForecast();
+  const { data: clusters } = useMLClusterForecast();
+  const { data: resources } = useMLResourceForecast();
+  const { data: coeGap } = useMLCOEGap();
+  const { data: projects } = useMLProjectForecast();
+  const { data: actuals } = useMLActuals();
+
+  // Revenue chart data: actuals + forecast
+  const revenueChartData = useMemo(() => {
+    if (!revenue || !actuals) return [];
+    const data: { month: string; actual?: number; p10?: number; p50?: number; p90?: number }[] = [];
+    // Last 6 actuals
+    for (const a of actuals.actuals.slice(-6)) {
+      data.push({ month: a.month.slice(5), actual: a.revenue / 1e6 });
+    }
+    // Forecast
+    for (const f of revenue.forecasts) {
+      data.push({ month: f.month.slice(5), p10: f.p10 / 1e6, p50: f.p50 / 1e6, p90: f.p90 / 1e6 });
+    }
+    return data;
+  }, [revenue, actuals]);
+
+  // Cluster stacked area
+  const clusterData = useMemo(() => {
+    if (!clusters) return [];
+    const months = clusters.clusters["1"]?.map(c => c.month) ?? [];
+    return months.map((month, i) => {
+      const row: Record<string, unknown> = { month: month.slice(5) };
+      for (const [cl, ms] of Object.entries(clusters.clusters)) {
+        row[`Cluster ${cl}`] = (ms[i]?.revenue_p50 ?? 0) / 1e6;
+      }
+      return row;
+    });
+  }, [clusters]);
+
+  // COE gap data
+  const coeGapData = useMemo(() => {
+    if (!coeGap) return [];
+    return Object.entries(coeGap.total_gap_by_coe)
+      .map(([coe, gap]) => ({
+        coe,
+        gap: Number(gap),
+        demand: coeGap.total_demand_by_coe[coe] ?? 0,
+        supply: coeGap.total_supply_by_coe[coe] ?? 0,
+      }))
+      .filter(d => d.demand > 0 || d.supply > 0)
+      .sort((a, b) => a.gap - b.gap);
+  }, [coeGap]);
+
+  // Resource utilization
+  const utilData = useMemo(() => {
+    if (!resources) return [];
+    return resources.months.map(m => ({
+      month: m.month.slice(5),
+      fte: m.total_fte,
+      bench: m.bench_count,
+      util: m.utilization_pct,
+    }));
+  }, [resources]);
+
+  if (revLoading) return <div className="py-12 text-sm text-gray-400 flex items-center gap-2"><Brain className="w-4 h-4 animate-pulse" /> Loading AI forecast models…</div>;
+
+  return (
+    <div className="space-y-5">
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="bg-white rounded-2xl p-4 border border-gray-100">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">12-Mo Revenue (P50)</p>
+          <p className="text-xl font-bold mt-1" style={{ color: "#19105B" }}>${((revenue?.annual_total_p50 ?? 0) / 1e6).toFixed(1)}M</p>
+          <p className="text-[10px] text-gray-400">YoY: +{((revenue?.growth_rate_yoy ?? 0) * 100).toFixed(0)}%</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-gray-100">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Projects (12mo)</p>
+          <p className="text-xl font-bold mt-1" style={{ color: "#19105B" }}>{projects?.annual_total_p50 ?? 0}</p>
+          <p className="text-[10px] text-gray-400">Avg {projects?.avg_monthly?.toFixed(0)}/mo</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-gray-100">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Avg FTE Demand</p>
+          <p className="text-xl font-bold mt-1" style={{ color: "#19105B" }}>{resources?.avg_monthly_fte?.toFixed(0) ?? 0}</p>
+          <p className="text-[10px] text-gray-400">Util: {resources?.avg_utilization?.toFixed(0)}%</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-gray-100">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Hiring Need</p>
+          <p className="text-xl font-bold mt-1" style={{ color: "#FF6196" }}>{coeGap ? Object.values(coeGap.hiring_needs).reduce((s, v) => s + v, 0) : 0}</p>
+          <p className="text-[10px] text-gray-400">Across COEs</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-gray-100">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Model MAPE</p>
+          <p className="text-xl font-bold mt-1" style={{ color: "#19105B" }}>{revenue?.train_mape?.toFixed(1)}%</p>
+          <p className="text-[10px] text-gray-400">{revenue?.training_months} months trained</p>
+        </div>
+      </div>
+
+      {/* Revenue Forecast Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Revenue Forecast (P10/P50/P90)</h3>
+          <p className="text-[10px] text-gray-400 mb-3">Actuals → 12-month ML prediction with confidence bands</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={revenueChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f5" />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${v.toFixed(1)}M`} />
+                <Tooltip formatter={(v: number) => `$${v.toFixed(2)}M`} />
+                <Area type="monotone" dataKey="p90" stroke="none" fill="#19105B15" name="P90" />
+                <Area type="monotone" dataKey="p50" stroke="#19105B" fill="#19105B30" strokeWidth={2} name="Forecast (P50)" />
+                <Area type="monotone" dataKey="p10" stroke="none" fill="#FFFFFF" name="P10" />
+                <Line type="monotone" dataKey="actual" stroke="#FF6196" strokeWidth={2.5} dot={{ r: 4 }} name="Actual" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Cluster Revenue */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Revenue by Cluster</h3>
+          <p className="text-[10px] text-gray-400 mb-3">12-month forecast decomposed by business cluster</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={clusterData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f5" />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${v.toFixed(1)}M`} />
+                <Tooltip formatter={(v: number) => `$${v.toFixed(2)}M`} />
+                <Area type="monotone" dataKey="Cluster 5" stackId="1" fill="#19105B" stroke="#19105B" name="Cluster 5" />
+                <Area type="monotone" dataKey="Cluster 3" stackId="1" fill="#3411A3" stroke="#3411A3" name="Cluster 3" />
+                <Area type="monotone" dataKey="Cluster 1" stackId="1" fill="#FF6196" stroke="#FF6196" name="Cluster 1" />
+                <Area type="monotone" dataKey="Cluster 2" stackId="1" fill="#71EAE1" stroke="#71EAE1" name="Cluster 2" />
+                <Area type="monotone" dataKey="Cluster 4" stackId="1" fill="#A16BDB" stroke="#A16BDB" name="Cluster 4" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Resource & COE Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Utilization */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>FTE Demand & Utilization</h3>
+          <p className="text-[10px] text-gray-400 mb-3">Projected allocation vs bench (12 months)</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={utilData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f5" />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="fte" fill="#19105B" name="Billable FTE" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="bench" fill="#FF619640" name="Bench" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* COE Gap */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>COE Supply vs Demand Gap</h3>
+          <p className="text-[10px] text-gray-400 mb-3">Negative = shortfall (FTE-months over 12 months)</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={coeGapData} layout="vertical" margin={{ left: 10, right: 16 }}>
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis type="category" dataKey="coe" tick={{ fontSize: 9 }} width={130} />
+                <Tooltip />
+                <Bar dataKey="gap" name="Gap (FTE-months)" barSize={14} radius={[0, 4, 4, 0]}>
+                  {coeGapData.map((d, i) => (
+                    <Cell key={i} fill={d.gap < 0 ? "#FF6196" : "#19105B"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Hiring & Project Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Hiring Recommendations */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Hiring Recommendations</h3>
+          <p className="text-[10px] text-gray-400 mb-3">Roles where peak demand exceeds 80% of current capacity</p>
+          <div className="space-y-2 max-h-52 overflow-y-auto">
+            {resources && Object.entries(resources.hiring_gap)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 8)
+              .map(([role, count]) => (
+                <div key={role} className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50">
+                  <span className="text-xs font-medium" style={{ color: "#19105B" }}>{role}</span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ background: "#FF6196" }}>+{count}</span>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        {/* Project Forecast */}
+        <div className="bg-white rounded-2xl p-5 border border-gray-100">
+          <h3 className="text-xs font-bold mb-1" style={{ color: "#19105B" }}>Project Volume Forecast</h3>
+          <p className="text-[10px] text-gray-400 mb-3">Monthly new project starts — historical + 12-month prediction</p>
+          <div className="h-52">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={[
+                ...(projects?.historical?.map(h => ({ month: h.month.slice(5), actual: h.count })) ?? []),
+                ...(projects?.forecasts?.map(f => ({ month: f.month.slice(5), forecast: f.p50 })) ?? []),
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f5" />
+                <XAxis dataKey="month" tick={{ fontSize: 9 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip />
+                <Bar dataKey="actual" fill="#19105B" name="Actual" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="forecast" fill="#19105B40" name="Forecast" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Model info footer */}
+      <div className="text-[10px] text-gray-400 pt-2">
+        Models: {revenue?.method} · {projects?.method} · {resources?.method} | Last actual: {revenue?.last_actual_month}
       </div>
     </div>
   );

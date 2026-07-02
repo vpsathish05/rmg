@@ -1,0 +1,41 @@
+{
+  "revenue": {
+    "annual_total_p50": 59364633.61,
+    "growth_rate_yoy": 0.7118,
+    "train_mape": 8.09,
+    "method": "Holt Linear Trend + Headcount Regression Ensemble"
+  },
+  "clusters": {
+    "count": 5,
+    "total_by_cluster": {
+      "1": 8140746.17,
+      "2": 5017398.7,
+      "3": 17215571.52,
+      "4": 4903367.17,
+      "5": 24087550.08
+    },
+    "avg_weights": {
+      "1": 0.15997106752634788,
+      "2": 0.11515378183717855,
+      "3": 0.2605292969153979,
+      "4": 0.1168507912989476,
+      "5": 0.3474950624221281
+    }
+  },
+  "projects": {
+    "annual_total_p50": 430,
+    "growth_rate_yoy": 0.1111,
+    "avg_monthly": 35.8
+  },
+  "resources": {
+    "avg_monthly_fte": 420.2,
+    "avg_utilization": 54.9,
+    "total_hiring_gap": 143
+  },
+  "coe_gap": {
+    "total_hiring_needs": 21,
+    "hiring_needs": {
+      "Consulting": 21
+    }
+  }
+}

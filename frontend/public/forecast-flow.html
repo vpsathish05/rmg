@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cluster Revenue & COE Forecast Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#180F5A;
+    --bg-step:#FFFFFF;
+    --surface:#FFFFFF;
+    --surface-alt:#F2F2F2;
+    --ink:#180F5A;
+    --ink-soft:#5A5480;
+    --white:#FFFFFF;
+    --pink:#FF6096;
+    --teal:#70E9E1;
+    --purple:#340FA2;
+    --lavender:#A16ADB;
+    --line:rgba(24,15,90,0.14);
+    --shadow:rgba(24,15,90,0.14);
+    --red:#FF4D6D;
+    --green:#2FBF71;
+  }
+  [data-theme="dark"]{
+    --bg-deep:#0A0726;
+    --bg-step:#140D3C;
+    --surface:#1D1652;
+    --surface-alt:#241C5E;
+    --ink:#F3F1FF;
+    --ink-soft:#B7AEE0;
+    --white:#FFFFFF;
+    --pink:#FF7FAE;
+    --teal:#7FF2E9;
+    --purple:#6C4CF1;
+    --lavender:#BE97F5;
+    --line:rgba(243,241,255,0.14);
+    --shadow:rgba(0,0,0,0.45);
+    --red:#FF6B85;
+    --green:#4ADE93;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg-step);
+    color:var(--ink);
+    font-family:'Manrope', sans-serif;
+    transition:background .5s ease, color .5s ease;
+  }
+  code, .mono{font-family:'JetBrains Mono', monospace;}
+
+  /* ---------- theme toggle ---------- */
+  .toggle{
+    position:fixed; top:20px; right:20px; z-index:80;
+    display:flex; align-items:center; gap:8px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 14px 6px 6px;
+    box-shadow:0 8px 24px var(--shadow);
+    cursor:pointer; user-select:none;
+    transition:background .5s ease, border-color .5s ease;
+  }
+  .toggle .dot{
+    width:26px; height:26px; border-radius:50%;
+    background:linear-gradient(135deg, var(--pink), var(--purple));
+    display:flex; align-items:center; justify-content:center; font-size:13px;
+    transition:transform .4s cubic-bezier(.34,1.56,.64,1);
+  }
+  .toggle:active .dot{transform:rotate(20deg);}
+  .toggle span{font-size:12.5px; font-weight:700; color:var(--ink-soft);}
+
+  section{padding:130px 8vw; position:relative; overflow:hidden;}
+  .deep{background:var(--bg-deep); color:var(--white); transition:background .5s ease;}
+  .step{background:var(--bg-step); transition:background .5s ease;}
+
+  .eyebrow{
+    font-size:12.5px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--pink); margin-bottom:10px;
+  }
+  h2.step-title{font-size:clamp(28px,4vw,42px); margin:0 0 8px; font-weight:800;}
+  .step-sub{color:var(--ink-soft); font-size:16px; margin:0 0 50px; max-width:600px;}
+  .deep .step-sub{color:rgba(255,255,255,.65);}
+
+  .reveal{opacity:0; transform:translateY(28px); transition:opacity .6s cubic-bezier(.2,.7,.3,1), transform .6s cubic-bezier(.2,.7,.3,1);}
+  .reveal.in{opacity:1; transform:translateY(0);}
+
+  /* ---------- hero ---------- */
+  .hero{
+    min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:40px 20px;
+  }
+  .mark{
+    width:64px; height:64px; border-radius:16px;
+    background:linear-gradient(135deg, var(--pink), var(--purple));
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:26px; color:#fff; margin-bottom:34px;
+  }
+  .hero h1{font-size:clamp(38px,6vw,56px); margin:0 0 16px; font-weight:800; letter-spacing:-.01em;}
+  .hero p{color:rgba(255,255,255,.65); font-size:18px; max-width:520px; margin:0 auto;}
+  .hero footer{position:absolute; bottom:36px; font-size:12.5px; color:rgba(255,255,255,.45);}
+  .scroll-cue{margin-top:60px; display:flex; flex-direction:column; align-items:center; gap:8px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,.45);}
+  .scroll-cue .stick{width:2px; height:40px; border-radius:2px; background:linear-gradient(var(--teal), transparent); animation:pulse 1.8s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.25;}50%{opacity:1;}}
+
+  /* ---------- STEP 1: source cards ---------- */
+  .req-card{
+    max-width:520px; border:1px solid var(--line); border-radius:6px; overflow:hidden;
+    box-shadow:0 20px 50px var(--shadow);
+  }
+  .req-head{
+    background:var(--bg-deep); color:#fff; padding:16px 22px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .req-head b{font-size:16px;}
+  .badge{
+    font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
+    border:1px solid var(--pink); color:var(--pink); padding:4px 10px; border-radius:4px;
+  }
+  .badge.parsed{border-color:var(--green); color:var(--green);}
+  .req-body{padding:6px 22px;}
+  .req-row{
+    display:flex; justify-content:space-between; padding:14px 0; border-bottom:1px solid var(--line);
+    opacity:0; transform:translateX(-12px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .req-row.in{opacity:1; transform:translateX(0);}
+  .req-row:last-child{border-bottom:none;}
+  .req-row .k{font-weight:700; font-size:14.5px;}
+  .req-row .v{color:var(--purple); font-size:14.5px; font-weight:600;}
+  [data-theme="dark"] .req-row .v{color:var(--lavender);}
+  .req-row .v.status{color:var(--pink); font-weight:800;}
+  .trigger-note{margin-top:26px; font-size:13.5px; color:var(--ink-soft); opacity:0; transition:opacity .6s ease .3s;}
+  .trigger-note.in{opacity:1;}
+
+  .dual-source-grid{display:flex; gap:36px; flex-wrap:wrap; align-items:flex-start;}
+  .dual-source-grid > .source-col{flex:1; min-width:280px;}
+  .merge-wrap{
+    margin-top:34px; display:flex; flex-direction:column; align-items:center; text-align:center;
+    opacity:0; transform:translateY(16px); transition:opacity .6s ease, transform .6s ease;
+  }
+  .merge-wrap.in{opacity:1; transform:translateY(0);}
+  .merge-lines-wide{width:100%; max-width:640px; height:64px; display:block; margin:0 auto;}
+  .merge-simple-line{display:none;}
+  .merge-target{
+    padding:16px 22px; border-radius:8px; background:var(--bg-deep); color:#fff;
+    font-size:14px; font-weight:800; box-shadow:0 14px 32px var(--shadow); text-align:center;
+  }
+  .merge-target span{display:block; font-size:11px; font-weight:600; color:var(--teal); margin-top:3px; letter-spacing:.02em;}
+
+  /* ---------- STEP 2: role -> rate mapping chain ---------- */
+  .flow-row{display:flex; align-items:flex-start; gap:0; flex-wrap:wrap; margin-top:10px;}
+  .flow-box{
+    width:240px; border-radius:6px; padding:18px 16px; text-align:center;
+    box-shadow:0 10px 26px var(--shadow);
+    opacity:0; transform:translateY(16px) scale(.96);
+    transition:opacity .5s ease, transform .5s cubic-bezier(.34,1.56,.64,1);
+  }
+  .flow-box.in{opacity:1; transform:translateY(0) scale(1);}
+  .flow-box h4{margin:0 0 4px; font-size:16px; color:#fff;}
+  .flow-box p{margin:0; font-size:11.5px; color:rgba(255,255,255,.8);}
+  .flow-box.b1{background:var(--purple);}
+  .flow-box.b2{background:var(--surface-alt);}
+  .flow-box.b2 h4, .flow-box.b2 p{color:var(--ink);}
+  .flow-box.b3{background:var(--pink);}
+  .flow-arrow{
+    width:60px; height:2px; background:var(--ink); margin:38px 4px 0; position:relative;
+    opacity:0; transition:opacity .4s ease .3s;
+  }
+  .flow-arrow.in{opacity:.4;}
+  .flow-arrow::after{content:''; position:absolute; right:0; top:-4px; border:5px solid transparent; border-left-color:var(--ink); opacity:.4;}
+  .flow-col{display:flex; flex-direction:column; align-items:center;}
+  .flow-result{
+    margin-top:12px; font-size:11.5px; font-weight:800; padding:5px 10px; border-radius:4px; border:1px solid; text-align:center;
+    opacity:0; transition:opacity .4s ease .5s;
+  }
+  .flow-result.in{opacity:1;}
+  .flow-result.fail{color:var(--red); border-color:var(--red); background:color-mix(in srgb, var(--red) 10%, transparent);}
+  .flow-result.pass{color:var(--green); border-color:var(--green); background:color-mix(in srgb, var(--green) 10%, transparent);}
+  .flow-caption{margin-top:8px; font-size:11.5px; color:var(--ink-soft);}
+
+  /* ---------- STEP 3: revenue formula ---------- */
+  .formula-box{
+    font-family:'JetBrains Mono', monospace; font-size:14px; border:1px solid var(--line);
+    border-radius:6px; padding:18px 22px; max-width:760px;
+    opacity:0; transform:translateY(14px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .formula-box.in{opacity:1; transform:translateY(0);}
+  .bars{margin-top:44px; max-width:680px;}
+  .bar-row{display:grid; grid-template-columns:150px 1fr 90px; align-items:center; gap:14px; margin-bottom:16px;}
+  .bar-row .lbl{font-weight:800; font-size:13.5px; text-align:right;}
+  .bar-track{height:26px; background:var(--surface-alt); border-radius:3px; overflow:hidden;}
+  .bar-fill{height:100%; width:0%; border-radius:3px; transition:width 1s cubic-bezier(.2,.8,.3,1);}
+  .bar-w{font-weight:800; font-size:13px; font-family:'JetBrains Mono', monospace;}
+
+  /* ---------- STEP 4: month proration timeline ---------- */
+  .timeline-wrap{
+    max-width:700px; border:1px solid var(--line); border-radius:6px; padding:22px 24px;
+    opacity:0; transform:translateY(14px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .timeline-wrap.in{opacity:1; transform:translateY(0);}
+  .timeline-deal{font-size:13px; color:var(--ink-soft); margin-bottom:14px;}
+  .timeline-deal b{color:var(--ink);}
+  .timeline-track{display:flex; height:44px; border-radius:5px; overflow:hidden; box-shadow:0 6px 18px var(--shadow);}
+  .timeline-seg{
+    display:flex; align-items:center; justify-content:center; color:#fff; font-size:11.5px; font-weight:800;
+    width:0%; transition:width .9s cubic-bezier(.2,.8,.3,1); white-space:nowrap; overflow:hidden;
+  }
+  .timeline-labels{display:flex; margin-top:8px;}
+  .timeline-labels span{flex:1; text-align:center; font-size:11px; color:var(--ink-soft); font-weight:700;}
+  .proration-note{margin-top:18px; font-size:12.5px; color:var(--ink-soft);}
+  .proration-note code{background:var(--surface-alt); padding:2px 6px; border-radius:3px;}
+
+  /* ---------- STEP 5: trend chart ---------- */
+  .trend-wrap{max-width:760px;}
+  .trend-chart{display:flex; align-items:flex-end; gap:10px; height:220px; padding:0 4px;}
+  .trend-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
+  .trend-bar{
+    width:100%; max-width:46px; border-radius:4px 4px 0 0; height:0%;
+    transition:height 1s cubic-bezier(.2,.8,.3,1);
+  }
+  .trend-bar.actual{background:var(--purple);}
+  [data-theme="dark"] .trend-bar.actual{background:var(--lavender);}
+  .trend-bar.forecast{background:repeating-linear-gradient(135deg, var(--teal), var(--teal) 6px, transparent 6px, transparent 12px); border:2px solid var(--teal);}
+  .trend-val{font-size:10.5px; font-weight:800; margin-bottom:6px; font-family:'JetBrains Mono', monospace; opacity:0; transition:opacity .4s ease;}
+  .trend-val.in{opacity:1;}
+  .trend-lbl{margin-top:8px; font-size:11px; color:var(--ink-soft); font-weight:700;}
+  .trend-legend{display:flex; gap:22px; margin-top:26px; font-size:12.5px; color:var(--ink-soft);}
+  .trend-legend .sw{display:inline-block; width:14px; height:14px; border-radius:3px; margin-right:7px; vertical-align:-2px;}
+  .trend-legend .sw.actual{background:var(--purple);}
+  [data-theme="dark"] .trend-legend .sw.actual{background:var(--lavender);}
+  .trend-legend .sw.forecast{background:repeating-linear-gradient(135deg, var(--teal), var(--teal) 4px, transparent 4px, transparent 8px); border:1.5px solid var(--teal);}
+
+  /* ---------- STEP 6: weight blend ---------- */
+  .weight-bars{margin-top:40px; max-width:680px;}
+  .wbar-row{display:grid; grid-template-columns:110px 1fr 60px; align-items:center; gap:14px; margin-bottom:14px;}
+  .wbar-row .lbl{font-weight:800; font-size:13.5px; text-align:right;}
+  .wbar-track{height:24px; background:var(--surface-alt); border-radius:3px; overflow:hidden;}
+  .wbar-fill{height:100%; width:0%; border-radius:3px; transition:width 1s cubic-bezier(.2,.8,.3,1);}
+  .wbar-w{font-weight:800; font-size:13px; font-family:'JetBrains Mono', monospace;}
+  .blend-eq{
+    margin-top:40px; max-width:680px; background:var(--bg-deep); color:#fff; border-radius:6px; padding:20px 24px;
+    font-family:'JetBrains Mono', monospace; font-size:14px;
+    opacity:0; transform:translateY(14px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .blend-eq.in{opacity:1; transform:translateY(0);}
+  .blend-eq .res{margin-top:10px; font-size:20px; font-weight:800; color:var(--teal);}
+
+  /* ---------- OUTPUT ---------- */
+  .out-grid{display:flex; gap:60px; flex-wrap:wrap;}
+  .out-main{flex:2; min-width:340px;}
+  .out-stats{flex:1; min-width:160px; display:flex; flex-direction:column; gap:22px; padding-top:6px;}
+  .out-stat b{display:block; font-size:34px; font-weight:800; color:var(--white);}
+  .out-stat span{font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.55);}
+  .out-table{border-radius:6px; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,.3);}
+  .out-th{
+    background:linear-gradient(90deg, var(--purple), var(--bg-deep)); color:#fff; padding:16px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .out-th b{font-size:16px;}
+  .out-th .badge2{font-size:11px; font-weight:800; background:rgba(255,255,255,.15); padding:5px 12px; border-radius:4px; color:var(--teal);}
+  .out-cols{display:grid; grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr 1.1fr; background:var(--surface-alt); color:var(--ink); font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; padding:10px 20px;}
+  .out-row{
+    display:grid; grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr 1.1fr; background:var(--surface); color:var(--ink); font-size:12.5px; padding:13px 20px; align-items:center;
+    border-top:1px solid var(--line);
+    opacity:0; transform:translateY(10px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .out-row.in{opacity:1; transform:translateY(0);}
+  .out-row b{font-weight:800;}
+  .out-row .tot{font-weight:800; color:var(--purple);}
+  [data-theme="dark"] .out-row .tot{color:var(--lavender);}
+  .out-row.total-row{background:var(--surface-alt); font-weight:800;}
+  .gap-neg{color:var(--red); font-weight:800;}
+  .gap-pos{color:var(--green); font-weight:800;}
+  .rationale-box{
+    margin-top:44px; max-width:680px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+    border-radius:6px; padding:18px 22px;
+    opacity:0; transform:translateY(14px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .rationale-box.in{opacity:1; transform:translateY(0);}
+  .rationale-box .tag{font-size:11px; font-weight:800; letter-spacing:.06em; color:var(--teal); margin-bottom:8px;}
+  .rationale-box p{margin:0; font-size:14px; line-height:1.65; color:rgba(255,255,255,.9);}
+  .out-sign{margin-top:100px; text-align:right; font-size:12.5px; color:rgba(255,255,255,.4);}
+  .out-sign b{display:block; color:#fff; font-size:15px;}
+
+  /* ---------- OUTPUT: tabs ---------- */
+  .source-tabs{display:flex; gap:8px; margin-bottom:30px;}
+  .source-tab{
+    display:flex; align-items:center; gap:8px;
+    padding:9px 18px; border-radius:999px; border:1px solid var(--line);
+    background:var(--surface); font-size:13px; font-weight:700; color:var(--ink-soft);
+    cursor:pointer; user-select:none; transition:background .3s ease, color .3s ease, border-color .3s ease;
+  }
+  .source-tab .n{width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.5;}
+  .source-tab.active{background:var(--bg-deep); color:#fff; border-color:var(--bg-deep);}
+  .source-tab:not(.active):hover{border-color:var(--purple); color:var(--purple);}
+  [data-theme="dark"] .source-tab:not(.active):hover{color:var(--lavender); border-color:var(--lavender);}
+  .source-panel{display:none;}
+  .source-panel.active{display:block;}
+  .deep .source-tabs .source-tab{background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.16); color:rgba(255,255,255,.6);}
+  .deep .source-tabs .source-tab.active{background:var(--teal); border-color:var(--teal); color:var(--bg-deep);}
+  .deep .source-tabs .source-tab:not(.active):hover{border-color:var(--teal); color:var(--teal);}
+
+  .gap-cols{display:grid; grid-template-columns:1.4fr repeat(6,1fr); background:var(--surface-alt); color:var(--ink); font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; padding:10px 20px;}
+  .gap-row{
+    display:grid; grid-template-columns:1.4fr repeat(6,1fr); background:var(--surface); color:var(--ink); font-size:12.5px; padding:12px 20px; align-items:center;
+    border-top:1px solid var(--line);
+    opacity:0; transform:translateY(10px); transition:opacity .5s ease, transform .5s ease;
+  }
+  .gap-row.in{opacity:1; transform:translateY(0);}
+  .gap-note{margin-top:20px; font-size:12.5px; color:rgba(255,255,255,.55); max-width:560px;}
+
+  @media (max-width:760px){
+    section{padding:90px 6vw;}
+    .flow-row{flex-direction:column; align-items:flex-start;}
+    .flow-arrow{width:2px; height:40px; margin:6px 0 6px 118px;}
+    .flow-col{width:100%;}
+    .bar-row{grid-template-columns:100px 1fr 60px;}
+    .wbar-row{grid-template-columns:80px 1fr 50px;}
+    .out-cols, .out-row{grid-template-columns:repeat(4,1fr); font-size:10.5px;}
+    .out-cols div:nth-child(n+5), .out-row > div:nth-child(n+5){display:none;}
+    .gap-cols, .gap-row{grid-template-columns:1.2fr repeat(3,1fr); font-size:10.5px;}
+    .gap-cols div:nth-child(n+5), .gap-row > div:nth-child(n+5){display:none;}
+    .dual-source-grid{flex-direction:column;}
+    .merge-lines-wide{display:none;}
+    .merge-simple-line{display:block; width:2px; height:36px; margin:0 auto; background:linear-gradient(var(--purple), var(--pink)); opacity:.55;}
+    .trend-chart{gap:4px;}
+    .trend-val{font-size:8.5px;}
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="toggle" id="themeToggle">
+  <div class="dot" id="toggleIcon">🌙</div>
+  <span id="toggleLabel">Dark</span>
+</div>
+
+<!-- HERO -->
+<section class="deep hero">
+  <div class="mark">₹</div>
+  <h1>Cluster Revenue &amp; COE Forecast Engine</h1>
+  <p>How the next 6 months of revenue-by-cluster and headcount demand are built from actuals, pipeline, and rate cards</p>
+  <div class="scroll-cue"><div class="stick"></div>Scroll to see it work</div>
+  <footer>RMG Forecasting · Jul – Dec 2026</footer>
+</section>
+
+<!-- STEP 1 -->
+<section class="step">
+  <div class="eyebrow">Step 1</div>
+  <h2 class="step-title">Two Data Sources In</h2>
+  <p class="step-sub">There's no single table with 3 years of revenue tagged by cluster. So the model blends two things that do exist: known company-wide monthly revenue, and a cluster-tagged pipeline of open deals.</p>
+
+  <div class="dual-source-grid">
+    <div class="source-col">
+      <div class="req-card reveal">
+        <div class="req-head"><b>6 Months Revenue (Actuals)</b><span class="badge parsed">Known</span></div>
+        <div class="req-body" id="revRows">
+          <div class="req-row"><span class="k">Jan 2026</span><span class="v">$3,801,000</span></div>
+          <div class="req-row"><span class="k">Feb 2026</span><span class="v">$4,139,000</span></div>
+          <div class="req-row"><span class="k">Mar 2026</span><span class="v">$4,153,000</span></div>
+          <div class="req-row"><span class="k">Apr 2026</span><span class="v">$4,177,000</span></div>
+          <div class="req-row"><span class="k">May 2026</span><span class="v">$4,290,000</span></div>
+          <div class="req-row"><span class="k">Jun 2026</span><span class="v status" style="color:var(--green)">$4,355,000</span></div>
+        </div>
+      </div>
+      <div class="trigger-note in" id="triggerNote1">▸ Company-wide total, no cluster split — feeds the top-down trend</div>
+    </div>
+
+    <div class="source-col">
+      <div class="req-card reveal">
+        <div class="req-head"><b>Pipeline Details → Forecast</b><span class="badge">200 deals</span></div>
+        <div class="req-body" id="pipeRows">
+          <div class="req-row"><span class="k">Sample Deal</span><span class="v">Sigma — Cluster 3</span></div>
+          <div class="req-row"><span class="k">Roles Requested</span><span class="v">P, SC, C, Sr Sol Con, SSE, SE</span></div>
+          <div class="req-row"><span class="k">Start → Weeks</span><span class="v">06 Jul 2026 · 11 wks</span></div>
+          <div class="req-row"><span class="k">Cluster tag</span><span class="v">Cluster 3</span></div>
+          <div class="req-row"><span class="k">Total lines</span><span class="v">293 role-lines</span></div>
+          <div class="req-row"><span class="k">Status</span><span class="v status">Not Resourced</span></div>
+        </div>
+      </div>
+      <div class="trigger-note in" id="triggerNote2">▸ Cluster-tagged but forward-looking only — feeds the bottom-up mix</div>
+    </div>
+  </div>
+
+  <div class="merge-wrap reveal" id="mergeWrap">
+    <svg class="merge-lines-wide" viewBox="0 0 640 70" preserveAspectRatio="none">
+      <path d="M160 0 C 160 40, 320 34, 320 70" fill="none" stroke="var(--purple)" stroke-width="2.5" opacity=".55"/>
+      <path d="M480 0 C 480 40, 320 34, 320 70" fill="none" stroke="var(--pink)" stroke-width="2.5" opacity=".55"/>
+    </svg>
+    <div class="merge-simple-line"></div>
+    <div class="merge-target">Blended Forecast Engine<span>Top-down trend × bottom-up cluster mix</span></div>
+  </div>
+</section>
+
+<!-- STEP 2 -->
+<section class="step" id="step2">
+  <div class="eyebrow">Step 2</div>
+  <h2 class="step-title">Role → Rate Mapping</h2>
+  <p class="step-sub">Every pipeline role code (e.g. "SC", "Sr Sol Con") is mapped to a standard rate-card role, a default location, and a Centre of Excellence.</p>
+  <div class="flow-row">
+    <div class="flow-col">
+      <div class="flow-box b1" data-seq="0"><h4>Pipeline Code</h4><p>"Sr Sol Con" — Sigma deal, Cluster 3</p></div>
+      <div class="flow-result pass" data-seq="1">✓ Recognised code</div>
+      <div class="flow-caption">Raw text from Forecast tab</div>
+    </div>
+    <div class="flow-arrow" data-seq="1"></div>
+    <div class="flow-col">
+      <div class="flow-box b2" data-seq="2"><h4>Role_Mapping lookup</h4><p>Code → Role, Location, COE</p></div>
+      <div class="flow-result pass" data-seq="3">✓ Senior Solutions Consultant · IN</div>
+      <div class="flow-caption">VLOOKUP against editable mapping table</div>
+    </div>
+    <div class="flow-arrow" data-seq="3"></div>
+    <div class="flow-col">
+      <div class="flow-box b3" data-seq="4"><h4>Rate_Card lookup</h4><p>Role + Location → USD day rate</p></div>
+      <div class="flow-result pass" data-seq="5">✓ $715 / day</div>
+      <div class="flow-caption">2-key match on Rate_Card tab</div>
+    </div>
+  </div>
+</section>
+
+<!-- STEP 3 -->
+<section class="step" id="step3">
+  <div class="eyebrow">Step 3</div>
+  <h2 class="step-title">Revenue Formula, Per Role Line</h2>
+  <div class="formula-box reveal">
+    revenue = <span style="color:var(--purple)">day rate</span> × <span style="color:var(--pink)">working days</span> × <span style="color:var(--teal)">allocation %</span>
+    <span class="mono" style="color:var(--ink-soft)"> &nbsp;(working days = weeks × 5)</span>
+  </div>
+  <p class="step-sub" style="margin-top:22px; margin-bottom:10px;">Applied to the Sigma deal (Cluster 3, 11 weeks = 55 working days):</p>
+  <div class="bars" id="bars">
+    <div class="bar-row" data-pct="63" data-color="var(--purple)"><div class="lbl">P · $3,526/d</div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-w">$48,483</div></div>
+    <div class="bar-row" data-pct="100" data-color="var(--pink)"><div class="lbl">SC · $2,798/d</div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-w">$76,945</div></div>
+    <div class="bar-row" data-pct="49" data-color="var(--teal)"><div class="lbl">C · $683/d</div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-w">$37,565</div></div>
+    <div class="bar-row" data-pct="45" data-color="var(--lavender)"><div class="lbl">Sr Sol Con · $715/d</div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-w">$34,409</div></div>
+    <div class="bar-row" data-pct="42" data-color="var(--purple)"><div class="lbl">SSE · $585/d</div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-w">$32,175</div></div>
+    <div class="bar-row" data-pct="33" data-color="var(--pink)"><div class="lbl">SE · $455/d</div><div class="bar-track"><div class="bar-fill"></div></div><div class="bar-w">$25,025</div></div>
+  </div>
+</section>
+
+<!-- STEP 4 -->
+<section class="step" id="step4">
+  <div class="eyebrow">Step 4</div>
+  <h2 class="step-title">Spreading Revenue Across Months</h2>
+  <p class="step-sub">A deal rarely fits neatly inside one calendar month. Each line's total revenue is prorated by day-overlap into every month it touches.</p>
+  <div class="timeline-wrap reveal" id="timelineWrap">
+    <div class="timeline-deal">Sigma · role <b>P (Partner)</b> · 06 Jul → 21 Sep 2026 · total <b>$48,483</b></div>
+    <div class="timeline-track" id="timelineTrack">
+      <div class="timeline-seg" id="seg1" style="background:var(--purple);">Jul $16,161</div>
+      <div class="timeline-seg" id="seg2" style="background:var(--pink);">Aug $19,269</div>
+      <div class="timeline-seg" id="seg3" style="background:var(--teal); color:var(--bg-deep);">Sep $13,053</div>
+    </div>
+    <div class="timeline-labels"><span>33.3%</span><span>39.7%</span><span>26.9%</span></div>
+    <div class="proration-note">Formula: <code>revenue × overlap_days(month) / total_deal_days</code> — repeated for all 293 role-lines, then summed by Cluster and Month.</div>
+  </div>
+</section>
+
+<!-- STEP 5 -->
+<section class="step" id="step5">
+  <div class="eyebrow">Step 5</div>
+  <h2 class="step-title">Top-Down Total Trend</h2>
+  <p class="step-sub">The 6 known months are trended forward with <code class="mono">FORECAST.LINEAR</code> to estimate total company revenue for Jul–Dec, independent of cluster.</p>
+  <div class="trend-wrap">
+    <div class="trend-chart" id="trendChart">
+      <div class="trend-col"><div class="trend-val" data-val="$3.80M">$3.80M</div><div class="trend-bar actual" data-h="58"></div><div class="trend-lbl">Jan</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.14M">$4.14M</div><div class="trend-bar actual" data-h="63"></div><div class="trend-lbl">Feb</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.15M">$4.15M</div><div class="trend-bar actual" data-h="63"></div><div class="trend-lbl">Mar</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.18M">$4.18M</div><div class="trend-bar actual" data-h="64"></div><div class="trend-lbl">Apr</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.29M">$4.29M</div><div class="trend-bar actual" data-h="66"></div><div class="trend-lbl">May</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.36M">$4.36M</div><div class="trend-bar actual" data-h="67"></div><div class="trend-lbl">Jun</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.48M">$4.48M</div><div class="trend-bar forecast" data-h="68"></div><div class="trend-lbl">Jul</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.57M">$4.57M</div><div class="trend-bar forecast" data-h="70"></div><div class="trend-lbl">Aug</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.66M">$4.66M</div><div class="trend-bar forecast" data-h="71"></div><div class="trend-lbl">Sep</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.76M">$4.76M</div><div class="trend-bar forecast" data-h="73"></div><div class="trend-lbl">Oct</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.85M">$4.85M</div><div class="trend-bar forecast" data-h="74"></div><div class="trend-lbl">Nov</div></div>
+      <div class="trend-col"><div class="trend-val" data-val="$4.94M">$4.94M</div><div class="trend-bar forecast" data-h="76"></div><div class="trend-lbl">Dec</div></div>
+    </div>
+    <div class="trend-legend">
+      <span><i class="sw actual"></i>Actual (Jan–Jun)</span>
+      <span><i class="sw forecast"></i>Forecast (Jul–Dec)</span>
+    </div>
+  </div>
+</section>
+
+<!-- STEP 6 -->
+<section class="step" id="step6">
+  <div class="eyebrow">Step 6</div>
+  <h2 class="step-title">Cluster Weight Blend</h2>
+  <p class="step-sub">Each cluster's share of the bottom-up pipeline (Step 4) becomes its % share of the top-down total (Step 5). If a month has no pipeline data, the cluster falls back to its 6-month average share.</p>
+  <div class="weight-bars" id="weightBars">
+    <div class="wbar-row" data-pct="16.9" data-color="var(--purple)"><div class="lbl">Cluster 1</div><div class="wbar-track"><div class="wbar-fill"></div></div><div class="wbar-w">16.9%</div></div>
+    <div class="wbar-row" data-pct="15.2" data-color="var(--pink)"><div class="lbl">Cluster 2</div><div class="wbar-track"><div class="wbar-fill"></div></div><div class="wbar-w">15.2%</div></div>
+    <div class="wbar-row" data-pct="25.7" data-color="var(--teal)"><div class="lbl">Cluster 3</div><div class="wbar-track"><div class="wbar-fill"></div></div><div class="wbar-w">25.7%</div></div>
+    <div class="wbar-row" data-pct="9.3" data-color="var(--lavender)"><div class="lbl">Cluster 4</div><div class="wbar-track"><div class="wbar-fill"></div></div><div class="wbar-w">9.3%</div></div>
+    <div class="wbar-row" data-pct="32.9" data-color="var(--purple)"><div class="lbl">Cluster 5</div><div class="wbar-track"><div class="wbar-fill"></div></div><div class="wbar-w">32.9%</div></div>
+  </div>
+  <div class="blend-eq reveal" id="blendEq">
+    Forecast[Cluster,Month] = Total Trend[Month] × Cluster Weight[Cluster,Month]
+    <div class="res">e.g. Jul-2026, Cluster 3 = $4,477,200 × 27.3% = $1,220,439</div>
+  </div>
+</section>
+
+<!-- OUTPUT -->
+<section class="deep" id="stepOut">
+  <div class="eyebrow">Output</div>
+  <h2 class="step-title">Final 6-Month Forecast</h2>
+  <p class="step-sub">The blended revenue-by-cluster table, and the COE headcount gap it implies — same underlying pipeline, two views.</p>
+
+  <div class="source-tabs" id="outTabs">
+    <div class="source-tab active" data-target="outPanelRevenue"><span class="n"></span>Revenue by Cluster</div>
+    <div class="source-tab" data-target="outPanelGap"><span class="n"></span>COE Supply–Demand Gap</div>
+  </div>
+
+  <div class="source-panel active" id="outPanelRevenue">
+    <div class="out-grid">
+      <div class="out-main">
+        <div class="out-table">
+          <div class="out-th"><b>Forecast Revenue (USD)</b><span class="badge2">Jul – Dec 2026</span></div>
+          <div class="out-cols"><div>Cluster</div><div>Jul</div><div>Aug</div><div>Sep</div><div>Oct</div><div>Nov</div><div>6-Mo Total</div></div>
+          <div id="outRows">
+            <div class="out-row"><b>Cluster 1</b><div>$1.01M</div><div>$0.80M</div><div>$0.38M</div><div>$0.23M</div><div>$0.00M</div><div class="tot">$3.25M</div></div>
+            <div class="out-row"><b>Cluster 2</b><div>$0.81M</div><div>$0.91M</div><div>$0.35M</div><div>$0.00M</div><div>$0.00M</div><div class="tot">$2.82M</div></div>
+            <div class="out-row"><b>Cluster 3</b><div>$1.22M</div><div>$1.05M</div><div>$1.44M</div><div>$0.79M</div><div>$0.00M</div><div class="tot">$5.77M</div></div>
+            <div class="out-row"><b>Cluster 4</b><div>$0.66M</div><div>$0.37M</div><div>$0.09M</div><div>$0.00M</div><div>$0.00M</div><div class="tot">$1.58M</div></div>
+            <div class="out-row"><b>Cluster 5</b><div>$0.78M</div><div>$1.44M</div><div>$2.40M</div><div>$3.74M</div><div>$4.85M</div><div class="tot">$14.84M</div></div>
+            <div class="out-row total-row"><b>TOTAL</b><div>$4.48M</div><div>$4.57M</div><div>$4.66M</div><div>$4.76M</div><div>$4.85M</div><div class="tot">$28.25M</div></div>
+          </div>
+        </div>
+        <div class="rationale-box reveal">
+          <div class="tag">Why Cluster 5 dominates Nov–Dec</div>
+          <p>Cluster 5 has the only confirmed pipeline deals landing in November, so it temporarily takes 100% of that month's weight. December has no pipeline coverage at all, so every cluster falls back to its 6-month average share instead — a sign the pipeline needs topping up further out, not a real demand signal.</p>
+        </div>
+      </div>
+      <div class="out-stats">
+        <div class="out-stat"><b class="count" data-count="200">0</b><span>Pipeline Deals</span></div>
+        <div class="out-stat"><b class="count" data-count="293">0</b><span>Role Lines</span></div>
+        <div class="out-stat"><b class="count" data-count="28">0</b><span>$M Forecast (6mo)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="source-panel" id="outPanelGap">
+    <div class="out-table">
+      <div class="out-th"><b>Capacity Gap — Supply minus Demand (FTE)</b><span class="badge2">Negative = shortfall</span></div>
+      <div class="gap-cols"><div>COE</div><div>Jul</div><div>Aug</div><div>Sep</div><div>Oct</div><div>Nov</div><div>Dec</div></div>
+      <div id="gapRows">
+        <div class="gap-row"><b>Data Engineering</b><div class="gap-neg">-11.4</div><div class="gap-neg">-8.7</div><div class="gap-neg">-4.8</div><div class="gap-neg">-1.4</div><div class="gap-pos">+0.2</div><div class="gap-pos">+1.0</div></div>
+        <div class="gap-row"><b>Techops &amp; Automation</b><div>0.0</div><div>0.0</div><div>0.0</div><div>0.0</div><div>0.0</div><div>0.0</div></div>
+        <div class="gap-row"><b>Data Science &amp; AI</b><div class="gap-neg">-0.1</div><div class="gap-neg">-0.0</div><div>0.0</div><div>0.0</div><div>0.0</div><div>0.0</div></div>
+        <div class="gap-row"><b>Full Stack</b><div class="gap-neg">-50.5</div><div class="gap-neg">-28.9</div><div class="gap-neg">-21.3</div><div class="gap-neg">-6.3</div><div class="gap-neg">-1.9</div><div>0.0</div></div>
+        <div class="gap-row"><b>Power BI &amp; Consulting</b><div class="gap-neg">-13.1</div><div class="gap-neg">-7.5</div><div class="gap-neg">-7.5</div><div class="gap-neg">-2.5</div><div class="gap-neg">-0.4</div><div>0.0</div></div>
+        <div class="gap-row"><b>Consulting</b><div class="gap-neg">-39.3</div><div class="gap-neg">-23.6</div><div class="gap-neg">-15.6</div><div class="gap-neg">-3.6</div><div class="gap-neg">-1.0</div><div>0.0</div></div>
+        <div class="gap-row"><b>GTM</b><div class="gap-neg">-3.7</div><div class="gap-neg">-2.8</div><div class="gap-neg">-2.1</div><div class="gap-neg">-0.7</div><div class="gap-neg">-0.3</div><div>0.0</div></div>
+      </div>
+    </div>
+    <p class="gap-note">Supply = active headcount with a recorded COE tag, minus employees already billable on confirmed projects. Only 286 of 665 active employees have a COE tag, so these shortfalls are likely overstated — closing that tagging gap would sharpen this view considerably.</p>
+  </div>
+
+  <div class="out-sign"><b>Forecast Engine</b>RMG · Cluster Revenue &amp; COE Model</div>
+</section>
+
+<script>
+  const body = document.body;
+  const toggle = document.getElementById('themeToggle');
+  const icon = document.getElementById('toggleIcon');
+  const label = document.getElementById('toggleLabel');
+  let dark = true;
+  toggle.addEventListener('click', () => {
+    dark = !dark;
+    body.setAttribute('data-theme', dark ? 'dark' : 'light');
+    icon.textContent = dark ? '🌙' : '☀️';
+    label.textContent = dark ? 'Dark' : 'Light';
+  });
+
+  function clearPending(el){
+    if(el._timers){ el._timers.forEach(t=>clearTimeout(t)); }
+    el._timers = [];
+  }
+
+  const reveals = document.querySelectorAll('.reveal');
+  const io1 = new IntersectionObserver(es=>{
+    es.forEach(e=>{ e.target.classList.toggle('in', e.isIntersecting); });
+  }, {threshold:.25});
+  reveals.forEach(el=>io1.observe(el));
+
+  function staggerReveal(container, selector, gap=140){
+    const els = container.querySelectorAll(selector);
+    container._timers = [];
+    const obs = new IntersectionObserver(es=>{
+      es.forEach(e=>{
+        clearPending(container);
+        if(e.isIntersecting){
+          els.forEach((el,i)=>{
+            const t = setTimeout(()=>el.classList.add('in'), i*gap);
+            container._timers.push(t);
+          });
+        } else {
+          els.forEach(el=>el.classList.remove('in'));
+        }
+      });
+    }, {threshold:.2});
+    obs.observe(container);
+  }
+  staggerReveal(document.getElementById('revRows'), '.req-row', 110);
+  staggerReveal(document.getElementById('pipeRows'), '.req-row', 110);
+  staggerReveal(document.getElementById('step2'), '[data-seq]', 260);
+  staggerReveal(document.getElementById('bars'), '.bar-row', 160);
+  staggerReveal(document.getElementById('weightBars'), '.wbar-row', 160);
+  staggerReveal(document.getElementById('outRows'), '.out-row', 130);
+  staggerReveal(document.getElementById('gapRows'), '.gap-row', 100);
+
+  // bar fill widths — Step 3 & Step 6
+  function wireBars(selector){
+    document.querySelectorAll(selector).forEach(row=>{
+      const pct = row.getAttribute('data-pct');
+      const color = row.getAttribute('data-color');
+      const fill = row.querySelector('.bar-fill, .wbar-fill');
+      fill.style.background = color;
+      row._timers = [];
+      const obs = new IntersectionObserver(es=>{
+        es.forEach(e=>{
+          clearPending(row);
+          if(e.isIntersecting){
+            const t = setTimeout(()=>{ fill.style.width = pct+'%'; }, 100);
+            row._timers.push(t);
+          } else {
+            fill.style.width = '0%';
+          }
+        });
+      }, {threshold:.3});
+      obs.observe(row);
+    });
+  }
+  wireBars('.bar-row');
+  wireBars('.wbar-row');
+
+  // timeline segments — Step 4
+  (function(){
+    const wrap = document.getElementById('timelineWrap');
+    const segs = [
+      {id:'seg1', w:33.3},
+      {id:'seg2', w:39.7},
+      {id:'seg3', w:26.9}
+    ];
+    wrap._timers = [];
+    const obs = new IntersectionObserver(es=>{
+      es.forEach(e=>{
+        clearPending(wrap);
+        if(e.isIntersecting){
+          segs.forEach((s,i)=>{
+            const t = setTimeout(()=>{ document.getElementById(s.id).style.width = s.w+'%'; }, 200 + i*220);
+            wrap._timers.push(t);
+          });
+        } else {
+          segs.forEach(s=>{ document.getElementById(s.id).style.width = '0%'; });
+        }
+      });
+    }, {threshold:.3});
+    obs.observe(wrap);
+  })();
+
+  // trend chart bars — Step 5
+  (function(){
+    const chart = document.getElementById('trendChart');
+    const cols = chart.querySelectorAll('.trend-col');
+    chart._timers = [];
+    const obs = new IntersectionObserver(es=>{
+      es.forEach(e=>{
+        clearPending(chart);
+        if(e.isIntersecting){
+          cols.forEach((col,i)=>{
+            const bar = col.querySelector('.trend-bar');
+            const val = col.querySelector('.trend-val');
+            const h = bar.getAttribute('data-h');
+            const t = setTimeout(()=>{ bar.style.height = h+'%'; val.classList.add('in'); }, i*90);
+            chart._timers.push(t);
+          });
+        } else {
+          cols.forEach(col=>{
+            col.querySelector('.trend-bar').style.height='0%';
+            col.querySelector('.trend-val').classList.remove('in');
+          });
+        }
+      });
+    }, {threshold:.25});
+    obs.observe(chart);
+  })();
+
+  // ---- tab switcher ----
+  function wireTabs(tabsId, onSwitch){
+    const wrap = document.getElementById(tabsId);
+    if(!wrap) return;
+    wrap.querySelectorAll('.source-tab').forEach(tab=>{
+      tab.addEventListener('click', ()=>{
+        if(tab.classList.contains('active')) return;
+        wrap.querySelectorAll('.source-tab').forEach(t=>t.classList.remove('active'));
+        tab.classList.add('active');
+        const targetId = tab.getAttribute('data-target');
+        const parent = wrap.parentElement;
+        parent.querySelectorAll(':scope > .source-panel').forEach(p=>p.classList.remove('active'));
+        const panel = document.getElementById(targetId);
+        panel.classList.add('active');
+        if(onSwitch) onSwitch(panel);
+      });
+    });
+  }
+  function replayRowStagger(panel, rowSelector, gap=100){
+    const rows = panel.querySelectorAll(rowSelector);
+    rows.forEach(r=>r.classList.remove('in'));
+    rows.forEach((r,i)=>{ setTimeout(()=>r.classList.add('in'), 60 + i*gap); });
+  }
+  wireTabs('outTabs', (panel)=>{
+    replayRowStagger(panel, '.gap-row', 90);
+    replayRowStagger(panel, '.out-row', 90);
+  });
+
+  // count-up stats
+  document.querySelectorAll('.count').forEach(el=>{
+    el._timers = [];
+    const obs = new IntersectionObserver(es=>{
+      es.forEach(e=>{
+        clearPending(el);
+        if(e.isIntersecting){
+          const target = parseInt(el.getAttribute('data-count'),10);
+          let cur = 0; const step = Math.max(1, Math.round(target/30));
+          const t = setInterval(()=>{
+            cur += step; if(cur>=target){cur=target; clearInterval(t);}
+            el.textContent = cur;
+          }, 25);
+          el._timers.push(t);
+        } else {
+          el.textContent = '0';
+        }
+      });
+    }, {threshold:.5});
+    obs.observe(el);
+  });
+</script>
+</body>
+</html>
