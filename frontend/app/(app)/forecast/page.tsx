@@ -25,7 +25,7 @@ export default function ForecastPage() {
       <div className="px-8 py-5 bg-white border-b border-gray-100 shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold" style={{ color: "#19105B" }}>Forecast</h1>
-          <p className="text-xs text-gray-400 mt-0.5">{total} resource requests · {highProb} high probability</p>
+          <p className="text-xs text-gray-400 mt-0.5">12-month projections · revenue, resources & demand</p>
         </div>
         <button
           onClick={() => setShowDocModal(true)}
@@ -36,66 +36,13 @@ export default function ForecastPage() {
       </div>
 
       <div className="px-6 pt-4 pb-8 overflow-y-auto flex-1 space-y-5">
-        {/* Alerts */}
-        {insights?.alerts && insights.alerts.length > 0 && (
-          <div className="space-y-2">
-            {insights.alerts.map((a, i) => (
-              <div key={i} className="rounded-xl p-3 flex items-center gap-3 border" style={{
-                background: a.type === "urgent" ? "#FF61960a" : a.type === "revenue" ? "#19105B08" : "#19105B05",
-                borderColor: a.type === "urgent" ? "#FF619630" : "#19105B15",
-              }}>
-                <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: a.type === "urgent" ? "#FF6196" : "#19105B" }} />
-                <span className="text-xs font-medium" style={{ color: "#19105B" }}>{a.message}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl p-4 border border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Revenue at Risk</p>
-              <DollarSign className="w-4 h-4" style={{ color: "#FF6196" }} />
-            </div>
-            <p className="text-2xl font-bold tabular-nums" style={{ color: "#FF6196" }}>
-              ${((insights?.revenue_at_risk ?? 0) / 1000).toFixed(0)}K
-            </p>
-            <p className="text-[10px] text-gray-400 mt-0.5">Unresourced weighted pipeline</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 border border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Unresourced</p>
-              <Users className="w-4 h-4" style={{ color: "#19105B" }} />
-            </div>
-            <p className="text-2xl font-bold tabular-nums" style={{ color: "#19105B" }}>{insights?.unresourced_roles ?? 0}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">{insights?.weighted_fte?.toFixed(1) ?? 0} weighted FTE</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 border border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">High Probability</p>
-              <Target className="w-4 h-4" style={{ color: "#19105B" }} />
-            </div>
-            <p className="text-2xl font-bold tabular-nums" style={{ color: "#19105B" }}>{highProb}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">Win probability ≥ 70%</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 border border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Hot Deals</p>
-              <Calendar className="w-4 h-4" style={{ color: "#FF6196" }} />
-            </div>
-            <p className="text-2xl font-bold tabular-nums" style={{ color: "#FF6196" }}>{insights?.hot_deals?.length ?? 0}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">Starting within 3 months</p>
-          </div>
-        </div>
-
         {/* Tabs */}
         <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl w-fit">
           {([
-            { key: "ai", label: "AI Forecast", icon: Brain },
+            { key: "ai", label: "12-Month Forecast", icon: TrendingUp },
             { key: "insights", label: "Insights", icon: Sparkles },
             { key: "pipeline", label: "Pipeline", icon: BarChart3 },
-            { key: "outlook", label: "6-Month Outlook", icon: TrendingUp },
+            { key: "outlook", label: "6-Month Outlook", icon: Target },
           ] as const).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
@@ -107,7 +54,7 @@ export default function ForecastPage() {
         </div>
 
         {tab === "ai" && <AIForecastView />}
-        {tab === "insights" && insights && <InsightsView insights={insights} />}
+        {tab === "insights" && <InsightsView insights={insights} pipelineData={pipelineData} />}
         {tab === "pipeline" && <PipelineList />}
         {tab === "outlook" && (outlookLoading
           ? <div className="py-12 text-sm text-gray-400 flex items-center gap-2"><TrendingUp className="w-4 h-4 animate-pulse" /> Loading…</div>
@@ -368,9 +315,66 @@ function AIForecastView() {
 
 
 // ── Insights View ──────────────────────────────────────────────────────────
-function InsightsView({ insights }: { insights: NonNullable<ReturnType<typeof useForecastInsights>["data"]> }) {
+function InsightsView({ insights, pipelineData }: { insights: ReturnType<typeof useForecastInsights>["data"]; pipelineData: ReturnType<typeof useForecast>["data"] }) {
+  const highProb = pipelineData?.filter(r => (r.probability_weight ?? 0) >= 0.7).length ?? 0;
+
+  if (!insights) return <div className="py-12 text-sm text-gray-400">Loading insights…</div>;
+
   return (
     <div className="space-y-5">
+      {/* Alerts */}
+      {insights.alerts && insights.alerts.length > 0 && (
+        <div className="space-y-2">
+          {insights.alerts.map((a, i) => (
+            <div key={i} className="rounded-xl p-3 flex items-center gap-3 border" style={{
+              background: a.type === "urgent" ? "#FF61960a" : a.type === "revenue" ? "#19105B08" : "#19105B05",
+              borderColor: a.type === "urgent" ? "#FF619630" : "#19105B15",
+            }}>
+              <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: a.type === "urgent" ? "#FF6196" : "#19105B" }} />
+              <span className="text-xs font-medium" style={{ color: "#19105B" }}>{a.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl p-4 border border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Revenue at Risk</p>
+            <DollarSign className="w-4 h-4" style={{ color: "#FF6196" }} />
+          </div>
+          <p className="text-2xl font-bold tabular-nums" style={{ color: "#FF6196" }}>
+            ${((insights.revenue_at_risk ?? 0) / 1000).toFixed(0)}K
+          </p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Unresourced weighted pipeline</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Unresourced</p>
+            <Users className="w-4 h-4" style={{ color: "#19105B" }} />
+          </div>
+          <p className="text-2xl font-bold tabular-nums" style={{ color: "#19105B" }}>{insights.unresourced_roles ?? 0}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{insights.weighted_fte?.toFixed(1) ?? 0} weighted FTE</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">High Probability</p>
+            <Target className="w-4 h-4" style={{ color: "#19105B" }} />
+          </div>
+          <p className="text-2xl font-bold tabular-nums" style={{ color: "#19105B" }}>{highProb}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Win probability ≥ 70%</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Hot Deals</p>
+            <Calendar className="w-4 h-4" style={{ color: "#FF6196" }} />
+          </div>
+          <p className="text-2xl font-bold tabular-nums" style={{ color: "#FF6196" }}>{insights.hot_deals?.length ?? 0}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Starting within 3 months</p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Capacity Gap */}
         <div className="bg-white rounded-2xl p-5 border border-gray-100">
