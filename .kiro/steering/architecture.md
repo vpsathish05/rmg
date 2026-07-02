@@ -8,7 +8,7 @@ AI-powered Resource Management System for JMan Group. Replaces manual email-base
   - Pipeline: new demand from pipeline_requests, AI scores candidates per open role
   - Extensions: auto-detected resource gaps (alloc_end < project_end) + AI replacement recommendations
   - Changes: email PDF form → AI parse (PyPDF2 form fields + pdfplumber fallback + GPT-4o) → auto-route (NEW→Pipeline, EXTEND→Changes with AI recs, CHANGE→Changes). Accepts subjects "Resource Request" and "Extension Request". "Process Emails" button triggers manual fetch.
-- UC2: Demand Forecasting — pipeline requests with 6-month outlook, weighted FTE, capacity gap, revenue at risk, hot deals
+- UC2: Demand Forecasting — 12-month ML forecast (revenue P10/P50/P90, cluster decomposition, resource FTE by role, project volume with seasonality, COE supply/demand gap) + pipeline insights (capacity gap, revenue at risk, hot deals)
 - UC3: Availability Dashboard — employee allocation status with billability tracking, charts (utilization donut, RAG, demand vs supply, COE distribution)
 - UC4: Project Health — RAG from WSR data (latest non-NO_COLOR entry), overrunning & ramp-down detection
 - UC5: Resource Map — network graph (projects connected by shared employees) + project/resource timeline (Gantt)
@@ -45,6 +45,7 @@ Categories: Available (has capacity) → BestMatch (score ≥ 0.40, allocated) �
 | Database | Azure PostgreSQL Flexible Server + pgvector | psycopg2-binary |
 | ORM | SQLAlchemy 2.x | ≥2.0.0 |
 | AI | OpenAI (gpt-4o + text-embedding-3-small 1536d) | ≥1.30.0 |
+| ML | statsmodels + scikit-learn | 0.14.6 / 1.9.0 |
 | Email | Azure Communication Services (azure-communication-email) | ≥1.0.0 |
 | Scheduling | APScheduler (AsyncIO) | ≥3.10.4 |
 | Auth | Custom JWT sessions (jose) — username/password | N/A |
@@ -112,6 +113,21 @@ rmg/
 │   │   ├── build_kb.py                 ← Project embeddings rebuild
 │   │   ├── build_skill_embeddings.py   ← Employee skill profile embeddings
 │   │   └── compute_recommendations.py  ← Standalone rec compute
+│   ├── ml/
+│   │   ├── rate_card.py          ← Unified rate lookup (30 roles × 3 locations)
+│   │   ├── role_mapping.py       ← Pipeline code → role/location/COE (27 mappings)
+│   │   ├── proration.py          ← Monthly revenue spreading engine
+│   │   ├── pipeline_calc.py      ← Pipeline deals → prorated revenue by cluster/COE
+│   │   ├── data_prep.py          ← 30-month revenue reconstruction from allocations
+│   │   ├── train.py              ← Full training orchestrator (5.3s all models)
+│   │   ├── predict.py            ← CLI prediction generator (--horizon, --format)
+│   │   ├── evaluate.py           ← Backtest evaluation (MAPE, MAE)
+│   │   └── models/
+│   │       ├── revenue_forecast.py   ← Holt + headcount regression ensemble
+│   │       ├── cluster_model.py      ← 5-cluster weight decomposition
+│   │       ├── coe_gap_model.py      ← COE supply/demand + hiring recs
+│   │       ├── resource_forecast.py  ← FTE by role, 12-month
+│   │       └── project_forecast.py   ← Holt-Winters seasonal (90 months)
 │   └── requirements.txt
 └── docs/                          ← Source data (CSV, XLSX)
 ```
@@ -131,6 +147,9 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 ### Email Webhook: Graph POST → background: fetch message → GPT parse → INSERT email_requests
 ### Email Manual: POST /api/webhooks/email/process-latest → fetch latest emails → extract PDF → GPT parse → route (NEW→pipeline, EXTEND/CHANGE→email_requests)
 
+### ML Forecast: GET /api/forecast/ml/* → reconstruct_revenue (allocs × rate card) → Holt/regression ensemble → cluster weights → COE gap → JSON response
+### ML Training: PYTHONPATH=. python3 -m ml.train → all 5 models in 5.3s → cache to ml/_cache/
+
 ## API Routes
 | Prefix | Router | Purpose |
 |--------|--------|---------|
@@ -140,6 +159,7 @@ Browser → Next.js (port 3000) → Axios → FastAPI (port 8000) → SQLAlchemy
 | `/api/allocations` | allocations.py | Allocation CRUD |
 | `/api/recommend` | recommend.py | Manual recommendation |
 | `/api/forecast` | forecast.py | Pipeline + outlook + insights (funnel, capacity gap, revenue, hot deals) |
+| `/api/forecast/ml/*` | ml_forecast.py | ML 12-month forecast (revenue, clusters, projects, resources, COE gap, summary, actuals) |
 | `/api/rmg/*` | rmg_engine.py | Pipeline, extensions, extensions/needs, recommend, KB, cache, auto-coe |
 | `/api/resource-map` | resource_map.py | Network graph, project timeline, employee timeline, employee search |
 | `/api/chat` | chat.py | GPT-4o chatbot with function calling (7 tools) |
@@ -171,6 +191,11 @@ Key patterns:
 | KB proof | text-embedding-3-small | Past project evidence via cosine search | Top 6 per role |
 | Email/PDF parsing | gpt-4o | Structured extraction from emails + PDF attachments (pdfplumber) | Per email |
 | Chatbot | gpt-4o (function calling) | Natural language queries → tool execution → formatted answers | Per user message |
+| Revenue forecast | statsmodels + sklearn | Holt + headcount regression ensemble (4.4% MAPE) | On-demand / weekly |
+| Project forecast | statsmodels | Holt-Winters seasonal (90 months training) | On-demand / weekly |
+| Resource forecast | statsmodels | Holt per role + pipeline demand overlay | On-demand / weekly |
+| Cluster model | numpy | Pipeline-derived weights with exponential decay blending | On-demand |
+| COE gap model | numpy | Dynamic supply projection + pipeline demand | On-demand |
 
 ## Email (ACS)
 - Send via Azure Communication Services Email SDK (`azure-communication-email`)
@@ -213,6 +238,11 @@ Key patterns:
 | `backend/app/services/kb.py` | pgvector build + search + semantic skill scoring (ANN + full) |
 | `backend/app/services/auto_reply.py` | Auto-reply for EXTEND emails: recommend + build HTML + send ACS |
 | `backend/app/routers/rmg_engine.py` | Largest router — main operational screen |
+| `backend/app/routers/ml_forecast.py` | ML forecast API (7 endpoints) |
+| `backend/ml/models/revenue_forecast.py` | Revenue ensemble model (Holt + regression) |
+| `backend/ml/data_prep.py` | Historical revenue reconstruction from allocations |
+| `backend/ml/rate_card.py` | Rate card parser (30 roles × 3 locations from XLSX) |
+| `backend/ml/train.py` | ML training orchestrator (all 5 models, 5.3s) |
 | `backend/etl/schema.sql` | Schema source of truth |
 | `backend/etl/build_skill_embeddings.py` | Employee skill embedding ETL |
 | `frontend/lib/hooks.ts` | All TS interfaces + query hooks (API contract) |
@@ -254,3 +284,28 @@ python -m etl.build_skill_embeddings
 # Compute all recommendations (full AI pipeline)
 python -m etl.compute_recommendations
 ```
+
+## ML Forecast Commands
+```bash
+cd backend && source .venv/bin/activate
+
+# Train all 5 models (5.3s)
+PYTHONPATH=. python3 -m ml.train
+
+# Generate predictions (table or JSON)
+PYTHONPATH=. python3 -m ml.predict --horizon 12 --format table
+
+# Backtest evaluation (4.4% MAPE revenue)
+PYTHONPATH=. python3 -m ml.evaluate
+```
+
+### ML Model Details
+| Model | Method | Training Data | Key Output |
+|-------|--------|---------------|-----------|
+| Revenue | Holt Damped + Headcount Regression (60/40 ensemble) | 30 months calibrated | $59.4M/year, +71% YoY |
+| Cluster | Pipeline-derived weights + exponential decay | Current pipeline (229 deals) | 5 clusters, C5=34.7% |
+| Project | Holt-Winters additive (period=12) | 90 months | 430/year, seasonal |
+| Resource | Holt per role + pipeline overlay | 18 months FTE by role | 420 FTE/mo, hiring gaps |
+| COE Gap | Supply projection + pipeline demand | Skills + allocations | 21 hires needed |
+
+Rate cards sourced from: `docs/pricing/2511_JMAN Pricing Tool (aligned with new JIN).xlsx` + `docs/pricing/Cluster_Revenue_COE_Forecast.xlsx`
